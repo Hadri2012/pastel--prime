@@ -181,6 +181,17 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
 .emojipop{position:absolute;bottom:100%;left:10px;margin-bottom:8px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:8px;display:grid;grid-template-columns:repeat(8,40px);gap:2px;z-index:6}
 .emojipop button{width:40px;height:40px;border:0;background:none;font-size:1.4rem;border-radius:10px}
 .emojipop button:hover{background:var(--accent-soft)}
+.photo{display:block;border:0;padding:0;margin:2px 0 4px;background:var(--accent-soft);border-radius:14px;overflow:hidden;width:min(260px,62vw);max-width:100%;cursor:zoom-in}
+.photo img{display:block;width:100%;height:100%;object-fit:cover}
+.photo .ph{display:grid;place-items:center;width:100%;height:100%;font-size:.85rem;color:var(--muted);font-weight:700}
+.photoprev{display:flex;align-items:center;gap:10px;max-width:760px;margin:0 auto 6px;padding:8px 10px;border-radius:14px;background:var(--accent-soft);font-size:.88rem;font-weight:700}
+.photoprev img{width:52px;height:52px;object-fit:cover;border-radius:10px}
+.photoprev span{flex:1}
+.viewer{position:fixed;inset:0;background:rgba(15,10,25,.92);z-index:30;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.viewer .vbar{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;color:#fff}
+.viewer .vbar a,.viewer .vbar button{color:#fff;background:rgba(255,255,255,.14);border:0;border-radius:12px;padding:10px 14px;font-weight:800;text-decoration:none;font-size:.95rem}
+.viewer .vimg{flex:1;display:grid;place-items:center;min-height:0;padding:8px}
+.viewer .vimg img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
 .readonly{max-width:760px;margin:0 auto;padding:10px;text-align:center;color:var(--muted);font-size:.9rem;font-weight:700}
 
 /* ---------- sheets ---------- */
@@ -309,8 +320,11 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
       <div class="t"><b id="ctxLbl"></b><span id="ctxTxt"></span></div>
       <button id="ctxX" class="iconbtn" type="button" aria-label="Annuler">✕</button>
     </div>
+    <div id="photoPrev" class="photoprev hidden"><img id="photoThumb" alt=""><span id="photoLbl">Photo prête à envoyer</span><button id="photoX" class="iconbtn" type="button" aria-label="Retirer la photo">✕</button></div>
     <div id="emojipop" class="emojipop hidden"></div>
     <div id="composer" class="composer">
+      <button id="btnPhoto" class="iconbtn" type="button" aria-label="Ajouter une photo">📷</button>
+      <input id="inPhoto" type="file" accept="image/*" hidden>
       <button id="btnEmoji" class="iconbtn" type="button" aria-label="Émojis">😊</button>
       <textarea id="inMsg" rows="1" maxlength="2000" placeholder="Écris un message…" aria-label="Message"></textarea>
       <button id="btnSend" class="send" type="button" aria-label="Envoyer" disabled>
@@ -322,6 +336,10 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
 </section>
 
 <div id="overlay" class="overlay hidden"><div id="sheet" class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="viewer" class="viewer hidden" role="dialog" aria-modal="true" aria-label="Photo">
+  <div class="vbar"><button id="vClose" type="button">✕ Fermer</button><a id="vSave" download="photo-pastel-prime.jpg" href="#">Enregistrer</a></div>
+  <div class="vimg"><img id="vImg" alt="Photo envoyée dans le chat"></div>
+</div>
 <div id="toast" class="toast hidden" role="status"></div>
 
 <script>
@@ -376,7 +394,7 @@ const REACTS = ["❤️","😂","👍","😮","😢","🙏"];
 const EMOJIS = ["😊","😂","🥰","😍","😎","🤔","😴","😭","🥺","😅","🙃","😇","🤗","🤩","😡","🤯","👍","👏","🙏","💪","✨","🌟","💖","💜","🌸","🌈","🍓","🧁","🎉","🔥","🐣","🐔"];
 
 const S = {
-  uid:null, pseudo:"", isAdmin:false, typedName:"", createMode:false, inviteCode:"",
+  uid:null, pseudo:"", isAdmin:false, typedName:"", createMode:false, inviteCode:"", photo:null,
   users:{}, recent:[], older:new Map(), pin:null, noMore:false, loadingOlder:false,
   usersLoaded:false, msgsLoaded:false, unlocked:false, isNew:false, entryLastRead:null,
   replyTo:null, editing:null, search:"", lastReadSent:0, typingSentUntil:0,
@@ -574,6 +592,7 @@ function toMsg(d){
   return { id:d.id, u:String(v.uid||""), n:typeof v.n==="string"?v.n:"", t:typeof v.t==="string"?v.t:"",
     c:typeof v.c==="number"?v.c:0, e:+v.e||0, d:!!v.d,
     r:(v.r && typeof v.r==="object" && v.r.id) ? {id:String(v.r.id), u:String(v.r.u||"")} : null,
+    img:typeof v.img==="string" ? v.img : "", iw:+v.iw||4, ih:+v.ih||3,
     pending:d.metadata.hasPendingWrites };
 }
 function teardownListeners(){ S.unsubs.forEach(u=>{ try{u();}catch(e){} }); S.unsubs = []; }
@@ -669,7 +688,8 @@ function isBigEmoji(t){ return t.length <= 16 && EMOJI_ONLY.test(t) && /\p{Exten
 function snippet(m){
   if(!m) return "Message plus ancien";
   if(m.d) return "Message supprimé";
-  const t = m.t.replace(/\s+/g," ");
+  if(m.img && !m.t.trim()) return "📷 Photo";
+  const t = (m.img ? "📷 " : "") + m.t.replace(/\s+/g," ");
   return t.length > 90 ? t.slice(0,90)+"…" : t;
 }
 
@@ -742,7 +762,7 @@ function renderMessages(msgs){
     const last = !next || next.u !== m.u || (next.c - m.c) > 5*60000 || dayLabel(next.c) !== day || (divAt && next.id === divAt.id);
     const mine = m.u === S.uid;
     const col = colorOf(m.u);
-    const big = !m.d && isBigEmoji(m.t);
+    const big = !m.d && !m.img && isBigEmoji(m.t);
     let cls = `row ${mine?"mine":"theirs"}${first?" first":""}${last?" last":""}${big?" big-emoji":""}`;
     if(!mine && !m.d && mentionsMe(m.t)) cls += " mentions-me";
 
@@ -760,7 +780,16 @@ function renderMessages(msgs){
         ticks = rd.length ? `<span class="ticks${all?" all":""}" title="Lu">✓✓</span>` : `<span class="ticks" title="Envoyé">✓</span>`;
       }
     }
-    const body = m.d ? `<div class="text deleted">🚫 Message supprimé</div>` : `${quote}<div class="text">${renderText(m.t)}</div>`;
+    let photo = "";
+    if(m.img && !m.d){
+      const src = imgCache.get(m.img);
+      const ratio = Math.min(Math.max(m.iw/m.ih, 0.5), 2);
+      photo = `<span class="photo" role="button" tabindex="0" data-img="${esc(m.img)}" style="aspect-ratio:${ratio}" aria-label="Voir la photo en grand">`
+        + (src && src !== "loading" && src !== "error" ? `<img src="${src}" alt="Photo de ${esc(nameOf(m.u, m.n))}">` : `<span class="ph">${src === "error" ? "Photo indisponible" : "Chargement de la photo…"}</span>`)
+        + `</span>`;
+    }
+    const txt = m.t.trim() ? `<div class="text">${renderText(m.t)}</div>` : "";
+    const body = m.d ? `<div class="text deleted">🚫 Message supprimé</div>` : `${quote}${photo}${txt}`;
     const meta = `<div class="meta">${m.e && !m.d ? "<span>modifié</span>" : ""}<span>${fmtTime.format(new Date(m.c))}</span>${ticks}</div>`;
 
     let chips = "";
@@ -792,6 +821,7 @@ function renderMessages(msgs){
     prev = m;
   });
   list.innerHTML = html;
+  for(const m of shown){ if(m.img && !m.d && !imgCache.has(m.img)) loadImg(m.img); }
 
   const maxC = msgs[msgs.length-1].c;
   const newest = msgs[msgs.length-1];
@@ -835,6 +865,71 @@ async function loadOlder(){
   S.loadingOlder = false; scheduleRender();
 }
 
+/* ================= photos ================= */
+const imgCache = new Map();   // id -> blob: URL | "loading" | "error"
+async function loadImg(id){
+  imgCache.set(id, "loading");
+  try{
+    const d = await getDoc(doc(db, "images", id));
+    const data = d.exists() ? d.data().data : "";
+    if(typeof data !== "string" || !data.startsWith("data:image/jpeg;base64,")) throw 0;
+    const blob = await (await fetch(data)).blob();
+    imgCache.set(id, URL.createObjectURL(blob));
+  }catch(e){ imgCache.set(id, "error"); }
+  scheduleRender();
+}
+function loadImage(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => res(im); im.onerror = () => rej(new Error("decode")); im.src = url;
+  });
+}
+/* Réduit la photo (1280 px max) et la réencode en JPEG : ça retire aussi les métadonnées comme la position GPS. */
+async function compressPhoto(file){
+  const im = await loadImage(file);
+  for(const max of [1280, 1024, 800]){
+    const k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight));
+    const w = Math.max(1, Math.round(im.naturalWidth*k)), h = Math.max(1, Math.round(im.naturalHeight*k));
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0,0,w,h); cx.drawImage(im, 0, 0, w, h);
+    for(const q of [0.75, 0.62, 0.5]){
+      const data = cv.toDataURL("image/jpeg", q);
+      if(data.length < 700000) return {data, w, h};
+    }
+  }
+  throw new Error("too-big");
+}
+function openViewer(id){
+  const src = imgCache.get(id);
+  if(!src || src === "loading" || src === "error") return;
+  $("vImg").src = src; $("vSave").href = src;
+  $("viewer").classList.remove("hidden");
+}
+$("vClose").addEventListener("click", ()=>{ $("viewer").classList.add("hidden"); $("vImg").removeAttribute("src"); });
+document.addEventListener("keydown", e => { if(e.key === "Escape") $("viewer").classList.add("hidden"); });
+
+$("btnPhoto").addEventListener("click", ()=>{
+  if(S.editing){ toast("Termine d’abord la modification de ton message."); return; }
+  $("inPhoto").value = ""; $("inPhoto").click();
+});
+$("inPhoto").addEventListener("change", async ()=>{
+  const f = $("inPhoto").files && $("inPhoto").files[0]; if(!f) return;
+  if(!f.type.startsWith("image/")){ toast("Ce fichier n’est pas une photo."); return; }
+  $("photoLbl").textContent = "Préparation de la photo…"; $("photoThumb").removeAttribute("src");
+  $("photoPrev").classList.remove("hidden");
+  try{
+    S.photo = await compressPhoto(f);
+    $("photoThumb").src = S.photo.data;
+    $("photoLbl").textContent = "Photo prête : ajoute un message si tu veux";
+  }catch(e){
+    S.photo = null; $("photoPrev").classList.add("hidden");
+    toast("Impossible d’utiliser cette photo. Essaie une autre image.");
+  }
+  refreshSend(); inMsg.focus();
+});
+$("photoX").addEventListener("click", clearPhoto);
+function clearPhoto(){ S.photo = null; $("photoPrev").classList.add("hidden"); $("photoThumb").removeAttribute("src"); refreshSend(); }
+
 /* accusés de lecture : on enregistre jusqu'où on a lu, sans écrire à chaque mouvement */
 let readT = 0;
 function maybeMarkRead(){
@@ -857,7 +952,7 @@ const inMsg = $("inMsg");
 const coarse = window.matchMedia && matchMedia("(pointer: coarse)").matches;
 function autosize(){ inMsg.style.height = "auto"; inMsg.style.height = Math.min(inMsg.scrollHeight+4, 140) + "px"; }
 function refreshSend(){
-  $("btnSend").disabled = !inMsg.value.trim();
+  $("btnSend").disabled = !inMsg.value.trim() && !S.photo;
   const over = inMsg.value.length > MAXLEN - 100;
   $("counter").classList.toggle("hidden", !over);
   if(over) $("counter").textContent = `${inMsg.value.length} / ${MAXLEN}`;
@@ -886,7 +981,8 @@ setInterval(renderPresence, 3000);
 
 async function send(){
   const text = inMsg.value.replace(/\s+$/,"").replace(/^\n+/,"");
-  if(!text.trim()) return;
+  const photo = S.editing ? null : S.photo;
+  if(!text.trim() && !photo) return;
   if(text.length > MAXLEN){ toast(`Ton message dépasse ${MAXLEN} caractères.`); return; }
   stopTyping();
   if(S.editing){
@@ -899,17 +995,25 @@ async function send(){
   }
   const last = S._msgs.length ? S._msgs[S._msgs.length-1].c : 0;
   const c = Math.max(Date.now(), last + 1);
-  const msg = {uid:S.uid, n:S.pseudo, t:text, c};
+  const msg = {uid:S.uid, n:S.pseudo, t:text.trim() ? text : "", c};
   if(S.replyTo){ const o = findMsg(S.replyTo); if(o) msg.r = {id:o.id, u:o.u}; }
   const backup = text;
-  cancelCtx(); inMsg.value = ""; autosize(); refreshSend();
+  cancelCtx(); inMsg.value = ""; if(photo) clearPhoto(); autosize(); refreshSend();
   S.forceBottom = true;
   try{
+    if(photo){
+      toast("Envoi de la photo…");
+      const ref = await addDoc(collection(db, "images"), {uid:S.uid, data:photo.data, c:Date.now(), w:photo.w, h:photo.h});
+      msg.img = ref.id; msg.iw = photo.w; msg.ih = photo.h;
+      msg.c = Math.max(Date.now(), c);
+    }
     await addDoc(collection(db, "messages"), msg);
     S.lastReadSent = Math.max(S.lastReadSent, c);
     writeMe({lastRead: Math.max(c, lastReadOf(S.uid)), lastSeen: Date.now(), away:false}).catch(()=>{});
   }catch(e){
-    if(!inMsg.value){ inMsg.value = backup; autosize(); refreshSend(); }
+    if(!inMsg.value){ inMsg.value = backup; autosize(); }
+    if(photo && !S.photo){ S.photo = photo; $("photoThumb").src = photo.data; $("photoLbl").textContent = "Photo non envoyée : réessaie"; $("photoPrev").classList.remove("hidden"); }
+    refreshSend();
     const c2 = String(e && e.code || "");
     toast(c2.includes("permission") ? "Message refusé : vérifie l’heure de ton téléphone, puis réessaie." :
           c2.includes("resource-exhausted") ? "Le chat a atteint sa limite gratuite du jour. Réessaie demain." :
@@ -958,6 +1062,7 @@ $("list").addEventListener("click", e => {
   const chip = e.target.closest("[data-react]"); if(chip){ setReact(chip.dataset.react, chip.dataset.e); return; }
   const info = e.target.closest("[data-info]"); if(info){ openInfo(info.dataset.info); return; }
   const jump = e.target.closest("[data-jump]"); if(jump){ jumpTo(jump.dataset.jump); return; }
+  const ph = e.target.closest("[data-img]"); if(ph){ openViewer(ph.dataset.img); return; }
   const bub = e.target.closest(".bubble");
   if(bub){
     const sel = window.getSelection && String(window.getSelection());
@@ -1014,7 +1119,8 @@ function openActions(id){
   if(!m.d) h += `<div class="rx">${REACTS.map(e=>`<button type="button" class="${my===e?"on":""}" data-r="${e}" aria-label="Réagir ${e}">${e}</button>`).join("")}</div>`;
   h += `<div class="acts">`;
   if(!m.d) h += `<button type="button" data-a="reply"><span class="ic">↩️</span>Répondre</button>`;
-  if(!m.d) h += `<button type="button" data-a="copy"><span class="ic">📋</span>Copier le texte</button>`;
+  if(!m.d && m.t.trim()) h += `<button type="button" data-a="copy"><span class="ic">📋</span>Copier le texte</button>`;
+  if(!m.d && m.img) h += `<button type="button" data-a="view"><span class="ic">🖼️</span>Voir la photo en grand</button>`;
   if(mine && !m.d) h += `<button type="button" data-a="edit"><span class="ic">✏️</span>Modifier</button>`;
   if(!m.d) h += `<button type="button" data-a="pin"><span class="ic">📌</span>${pinned?"Désépingler":"Épingler"}</button>`;
   h += `<button type="button" data-a="info"><span class="ic">👀</span>Qui a lu ce message</button>`;
@@ -1035,6 +1141,7 @@ function openActions(id){
     if(a === "reply") startReply(id);
     else if(a === "edit") startEdit(id);
     else if(a === "info") openInfo(id);
+    else if(a === "view") openViewer(m.img);
     else if(a === "pin") togglePin(m, pinned);
     else if(a === "del") confirmSheet({title:"Supprimer ce message ?", body:"Il sera remplacé par « Message supprimé » pour tout le monde.", ok:"Supprimer", danger:true, run:()=>deleteMsg(m)});
     else if(a === "mod") confirmSheet({title:"Supprimer le message de "+nameOf(m.u, m.n)+" ?", body:"En tant qu’animateur, tu peux retirer ce message pour tout le monde.", ok:"Supprimer", danger:true, run:()=>deleteMsg(m)});
@@ -1043,7 +1150,8 @@ function openActions(id){
 async function deleteMsg(m){
   if(S.editing === m.id || S.replyTo === m.id) cancelCtx();
   try{
-    await updateDoc(doc(db, "messages", m.id), {t:"", d:true, r:deleteField()});
+    await updateDoc(doc(db, "messages", m.id), {t:"", d:true, r:deleteField(), img:deleteField()});
+    if(m.img) deleteDoc(doc(db, "images", m.img)).catch(()=>{});
     if(S.pin && S.pin.id === m.id) await deleteDoc(doc(db, "meta", "pin"));
   }catch(e){ toast("La suppression n’a pas pu être faite. Réessaie."); }
 }
