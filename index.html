@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>pastel prime 🌟</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Version hébergée (GitHub Pages + Firebase). Plan : un fil unique sur fond lavande laiteux, bulles pastel par personne, en-tête et compositeur flottants. */
+:root{
+  --bg:#f7f2ff;
+  --bg2:#fff4f8;
+  --surface:#ffffff;
+  --ink:#3a3150;
+  --muted:#8b81a4;
+  --line:#e9e1f7;
+  --accent:#9d74ea;
+  --accent-ink:#ffffff;
+  --accent-soft:#efe6ff;
+  --danger:#d9476b;
+  --ok:#2fa57a;
+  --bubble-ink:#2d2540;
+  --shadow:0 6px 24px rgba(92,64,150,.10);
+  --font-display:"Fredoka","Nunito",ui-rounded,system-ui,sans-serif;
+  --font-body:"Nunito",ui-rounded,system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1c1826; --bg2:#231c2b; --surface:#2a2438; --ink:#f1ebfc; --muted:#a99fc2; --line:#3a3250;
+    --accent:#b996ff; --accent-ink:#1c1826; --accent-soft:#3a2f55; --danger:#ff7d9c; --ok:#6fd6ac;
+    --shadow:0 6px 24px rgba(0,0,0,.35); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1c1826; --bg2:#231c2b; --surface:#2a2438; --ink:#f1ebfc; --muted:#a99fc2; --line:#3a3250;
+  --accent:#b996ff; --accent-ink:#1c1826; --accent-soft:#3a2f55; --danger:#ff7d9c; --ok:#6fd6ac;
+  --shadow:0 6px 24px rgba(0,0,0,.35); color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:linear-gradient(160deg,var(--bg) 0%,var(--bg2) 100%);
+  background-color:var(--bg);
+  color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.4;
+  -webkit-font-smoothing:antialiased;overflow:hidden;
+}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:10px}
+.hidden{display:none !important}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- logo ---------- */
+.logo{font-family:var(--font-display);font-weight:600;letter-spacing:-.01em;display:inline-flex;align-items:center;gap:.3em}
+.logo .p{background:linear-gradient(90deg,#f49ac1,#b48cf2 50%,#7cc7e8);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ---------- boot / login ---------- */
+.center{flex:1;display:flex;align-items:center;justify-content:center;padding:24px 16px;overflow:auto}
+.card{width:100%;max-width:400px;background:var(--surface);border-radius:28px;box-shadow:var(--shadow);padding:28px 24px;display:flex;flex-direction:column;gap:18px;border:1px solid var(--line)}
+.card .logo{font-size:2rem;justify-content:center}
+.card h1{margin:0;text-align:center}
+.tag{margin:-8px 0 0;text-align:center;color:var(--muted);font-size:.95rem}
+.steps{display:flex;gap:8px;justify-content:center}
+.step{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted);font-weight:700}
+.step b{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--muted);font-size:.8rem}
+.step.on{color:var(--ink)} .step.on b{background:var(--accent);color:var(--accent-ink)}
+.step.done b{background:var(--ok);color:#fff}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-weight:700;font-size:.92rem}
+.input{width:100%;padding:14px 16px;border-radius:16px;border:2px solid var(--line);background:var(--bg);font-size:1.05rem;outline:none;transition:border-color .15s}
+.input:focus{border-color:var(--accent)}
+.hint{font-size:.85rem;color:var(--muted);margin:0}
+.err{font-size:.9rem;color:var(--danger);font-weight:700;margin:0;min-height:1.2em}
+.btn{border:0;border-radius:16px;padding:14px 18px;font-weight:800;font-size:1rem;background:var(--accent);color:var(--accent-ink);min-height:50px;transition:transform .1s, opacity .15s}
+.btn:active{transform:scale(.98)}
+.btn[disabled]{opacity:.55;cursor:default}
+.btn.ghost{background:transparent;color:var(--accent);border:2px solid var(--accent-soft)}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.small{min-height:40px;padding:8px 14px;font-size:.92rem;border-radius:12px}
+.linkbtn{background:none;border:0;color:var(--accent);font-weight:700;padding:6px;font-size:.92rem;text-decoration:underline;text-underline-offset:3px}
+.who{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--accent-soft);border-radius:14px;font-weight:700}
+.who .linkbtn{margin-left:auto}
+.spinner{width:34px;height:34px;border-radius:50%;border:4px solid var(--accent-soft);border-top-color:var(--accent);animation:spin 1s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.note{font-size:.85rem;color:var(--muted);text-align:center;margin:0}
+
+/* ---------- chat layout ---------- */
+#chat{gap:0}
+header.top{display:flex;align-items:center;gap:10px;padding:10px 12px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);z-index:3}
+header.top .title{flex:1;min-width:0;display:flex;flex-direction:column;background:none;border:0;text-align:left;padding:4px 6px;border-radius:12px}
+header.top .logo{font-size:1.3rem}
+header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{width:44px;height:44px;border-radius:14px;border:0;background:transparent;display:grid;place-items:center;flex:none;color:var(--ink)}
+.iconbtn:hover{background:var(--accent-soft)}
+.iconbtn svg{width:22px;height:22px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:4px;vertical-align:1px}
+
+.pinbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--line);font-size:.9rem;z-index:2}
+.pinbar button.go{flex:1;min-width:0;text-align:left;background:none;border:0;padding:4px;display:flex;flex-direction:column}
+.pinbar .lbl{font-size:.75rem;font-weight:800;color:var(--accent)}
+.pinbar .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.searchbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--line)}
+.searchbar .input{padding:10px 14px;font-size:1rem}
+.searchbar .count{font-size:.8rem;color:var(--muted);white-space:nowrap}
+
+.scroller{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 12px 8px;position:relative;overscroll-behavior:contain}
+.list{display:flex;flex-direction:column;gap:2px;max-width:760px;margin:0 auto}
+.empty{margin:auto;text-align:center;color:var(--muted);padding:40px 16px;max-width:320px}
+.empty .big{font-size:2.6rem}
+.day{align-self:center;margin:14px 0 8px;font-size:.78rem;font-weight:800;color:var(--muted);background:var(--surface);padding:4px 12px;border-radius:999px;border:1px solid var(--line)}
+.unread{display:flex;align-items:center;gap:10px;margin:10px 0;color:var(--danger);font-size:.8rem;font-weight:800}
+.unread::before,.unread::after{content:"";flex:1;height:2px;background:color-mix(in srgb,var(--danger) 40%,transparent);border-radius:2px}
+
+.row{display:flex;gap:8px;align-items:flex-end;margin-top:2px}
+.row.first{margin-top:10px}
+.row.mine{flex-direction:row-reverse}
+.av{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:800;font-size:.85rem;color:var(--bubble-ink);user-select:none}
+.av.ghost{visibility:hidden}
+.col{display:flex;flex-direction:column;max-width:min(78%,560px);min-width:0}
+.row.mine .col{align-items:flex-end}
+.name{font-size:.78rem;font-weight:800;margin:0 0 3px 12px}
+.bubble{position:relative;padding:8px 12px 6px;border-radius:20px;background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:0 1px 2px rgba(60,40,100,.05);text-align:left;cursor:pointer;-webkit-user-select:text;user-select:text;overflow-wrap:anywhere;word-break:break-word;transition:filter .15s}
+.row.mine .bubble{background:var(--mine-bg,#e3d4ff);color:var(--bubble-ink);border-color:transparent}
+.row.theirs .bubble{border-bottom-left-radius:8px}
+.row.mine .bubble{border-bottom-right-radius:8px}
+.row.theirs:not(.last) .bubble{border-bottom-left-radius:20px}
+.row.mine:not(.last) .bubble{border-bottom-right-radius:20px}
+.row.mentions-me .bubble{box-shadow:0 0 0 2px var(--accent)}
+.bubble:hover{filter:brightness(.98)}
+.bubble.flash{animation:flash 1.4s ease}
+@keyframes flash{0%,40%{box-shadow:0 0 0 4px var(--accent)}100%{box-shadow:none}}
+.text{white-space:pre-wrap}
+.text a{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:700}
+.text .mention{font-weight:800;color:var(--accent)}
+.row.mine .text .mention{color:#6a3fc4}
+.text mark{background:#ffe68a;color:#2d2540;border-radius:4px;padding:0 2px}
+.text.deleted{font-style:italic;opacity:.65}
+.big-emoji .text{font-size:2.2rem;line-height:1.15}
+.meta{display:flex;gap:6px;justify-content:flex-end;align-items:center;font-size:.72rem;opacity:.7;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ticks{font-weight:800;letter-spacing:-.15em}
+.ticks.all{color:#5a7cf0;opacity:1}
+.row.mine .ticks.all{color:#3456d6}
+.quote{display:block;width:100%;border:0;text-align:left;border-left:4px solid var(--q,var(--accent));background:color-mix(in srgb,var(--surface) 55%,transparent);border-radius:10px;padding:5px 8px;margin:2px 0 6px;font-size:.85rem;color:inherit}
+.quote b{display:block;font-size:.75rem}
+.quote span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.8}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:-4px;padding:0 6px;z-index:1}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:2px 8px;font-size:.85rem;display:inline-flex;gap:4px;align-items:center;min-height:28px}
+.chip.me{border-color:var(--accent);background:var(--accent-soft)}
+.chip small{font-weight:800;font-size:.75rem}
+.seen{display:flex;gap:2px;justify-content:flex-end;margin:3px 2px 0;background:none;border:0;padding:2px;align-items:center}
+.seen .av{width:18px;height:18px;font-size:.6rem;border:2px solid var(--bg)}
+.seen .lbl{font-size:.72rem;color:var(--muted);margin-right:4px;font-weight:700}
+
+.fab{position:absolute;right:16px;bottom:12px;border:0;border-radius:999px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow);padding:10px 14px;font-weight:800;display:flex;gap:6px;align-items:center;border:1px solid var(--line);z-index:4}
+.fab .n{background:var(--danger);color:#fff;border-radius:999px;padding:0 7px;font-size:.8rem}
+.mainwrap{flex:1;display:flex;flex-direction:column;position:relative;min-height:0}
+
+.typing{height:22px;padding:0 20px;font-size:.82rem;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:6px}
+.typing i{display:inline-flex;gap:3px}
+.typing i span{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:bounce 1.2s infinite}
+.typing i span:nth-child(2){animation-delay:.15s}.typing i span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:none;opacity:.5}30%{transform:translateY(-4px);opacity:1}}
+
+.composer-wrap{padding:6px 10px 10px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line)}
+.ctx{display:flex;align-items:center;gap:8px;max-width:760px;margin:0 auto 6px;padding:8px 10px;border-radius:14px;background:var(--accent-soft);font-size:.88rem;border-left:4px solid var(--accent)}
+.ctx .t{flex:1;min-width:0}
+.ctx .t b{display:block;font-size:.78rem;color:var(--accent)}
+.ctx .t span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.composer{display:flex;align-items:flex-end;gap:6px;max-width:760px;margin:0 auto}
+.composer textarea{flex:1;resize:none;border:2px solid var(--line);background:var(--bg);border-radius:22px;padding:11px 16px;max-height:140px;min-height:46px;line-height:1.35;outline:none;font-size:1rem}
+.composer textarea:focus{border-color:var(--accent)}
+.send{width:46px;height:46px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+.send[disabled]{opacity:.45}
+.send svg{width:22px;height:22px}
+.counter{font-size:.75rem;color:var(--danger);text-align:right;max-width:760px;margin:2px auto 0;font-weight:700}
+.emojipop{position:absolute;bottom:100%;left:10px;margin-bottom:8px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:8px;display:grid;grid-template-columns:repeat(8,40px);gap:2px;z-index:6}
+.emojipop button{width:40px;height:40px;border:0;background:none;font-size:1.4rem;border-radius:10px}
+.emojipop button:hover{background:var(--accent-soft)}
+.readonly{max-width:760px;margin:0 auto;padding:10px;text-align:center;color:var(--muted);font-size:.9rem;font-weight:700}
+
+/* ---------- sheets ---------- */
+.overlay{position:fixed;inset:0;background:rgba(30,20,50,.38);z-index:20;display:flex;align-items:flex-end;justify-content:center;animation:fade .15s}
+@keyframes fade{from{opacity:0}}
+.sheet{width:100%;max-width:520px;max-height:86%;overflow:auto;background:var(--surface);border-radius:26px 26px 0 0;padding:10px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;animation:up .2s ease}
+@media (min-width:640px){.overlay{align-items:center}.sheet{border-radius:26px;max-height:80%}}
+@keyframes up{from{transform:translateY(30px);opacity:.5}}
+.grab{width:40px;height:5px;border-radius:5px;background:var(--line);align-self:center}
+.sheet h2{font-family:var(--font-display);font-weight:600;font-size:1.25rem;margin:4px 0 0}
+.sheet h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:6px 0 0}
+.rx{display:flex;justify-content:space-between;gap:4px;background:var(--bg);border-radius:20px;padding:6px}
+.rx button{flex:1;height:48px;border:0;background:none;font-size:1.6rem;border-radius:14px}
+.rx button.on{background:var(--accent-soft)}
+.acts{display:flex;flex-direction:column;border-radius:18px;overflow:hidden;border:1px solid var(--line)}
+.acts button{display:flex;align-items:center;gap:12px;padding:14px 16px;border:0;background:var(--surface);text-align:left;font-weight:700;font-size:1rem;min-height:52px}
+.acts button+button{border-top:1px solid var(--line)}
+.acts button:hover{background:var(--accent-soft)}
+.acts button.red{color:var(--danger)}
+.acts .ic{width:24px;text-align:center}
+.preview{background:var(--bg);border-radius:16px;padding:10px 12px;font-size:.92rem;max-height:120px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.people{display:flex;flex-direction:column;gap:2px}
+.person{display:flex;align-items:center;gap:10px;padding:8px 4px}
+.person .av{width:38px;height:38px}
+.person .n{font-weight:800}
+.person .s{font-size:.82rem;color:var(--muted)}
+.person .meinfo{margin-left:auto;font-size:.75rem;color:var(--muted);font-weight:700}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.9rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-weight:700}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.swatch{width:44px;height:44px;border-radius:50%;border:3px solid transparent}
+.swatch.on{border-color:var(--ink)}
+.row-btns{display:flex;gap:8px}
+.row-btns .btn{flex:1}
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:14px;font-weight:700;font-size:.92rem;z-index:40;max-width:90%;text-align:center;box-shadow:var(--shadow)}
+.muted{color:var(--muted)}
+@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+
+<section id="boot" class="screen">
+  <div class="center">
+    <div class="card">
+      <h1 class="logo"><span class="p">pastel prime</span> 🌟</h1>
+      <div id="bootSpin" class="spinner" aria-hidden="true"></div>
+      <p id="bootMsg" class="note">Ouverture du chat…</p>
+    </div>
+  </div>
+</section>
+
+<section id="login" class="screen hidden">
+  <div class="center">
+    <form id="loginForm" class="card" autocomplete="on" novalidate>
+      <h1 class="logo"><span class="p">pastel prime</span> 🌟</h1>
+      <p class="tag">Le fil de discussion du groupe</p>
+      <div class="steps" aria-hidden="true">
+        <span id="st1" class="step on"><b>1</b>Pseudo</span>
+        <span id="st2" class="step"><b>2</b>Mot de passe</span>
+      </div>
+
+      <div id="stepName" class="field">
+        <label for="inName">Ton nom d’utilisateur</label>
+        <input id="inName" name="username" class="input" maxlength="20" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ex. hadrien" enterkeyhint="next">
+        <p class="hint">Lettres sans accents, chiffres, point, tiret ou _ (2 à 20 caractères).</p>
+      </div>
+
+      <div id="stepPass" class="hidden" style="display:flex;flex-direction:column;gap:14px">
+        <div class="who"><span id="whoName"></span><button type="button" id="btnBack" class="linkbtn">Changer</button></div>
+        <div class="field">
+          <label for="inPass">Mot de passe de sécurité</label>
+          <input id="inPass" name="password" class="input" type="password" autocomplete="current-password" enterkeyhint="go">
+        </div>
+        <div id="createFields" class="hidden" style="display:flex;flex-direction:column;gap:14px">
+          <div class="field">
+            <label for="inPass2">Confirme le mot de passe</label>
+            <input id="inPass2" class="input" type="password" autocomplete="new-password">
+          </div>
+          <div class="field">
+            <label for="inCode">Code du groupe</label>
+            <input id="inCode" class="input" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="donné par l’animateur">
+            <p class="hint">Demandé une seule fois, pour que seuls les membres du groupe puissent entrer.</p>
+          </div>
+        </div>
+        <button id="btnMode" type="button" class="linkbtn">Première fois ici ? Créer mon compte</button>
+      </div>
+
+      <p id="loginErr" class="err" role="alert"></p>
+      <button id="btnLogin" class="btn" type="submit">Continuer</button>
+      <button id="btnForgot" type="button" class="linkbtn hidden">Mot de passe oublié ?</button>
+    </form>
+  </div>
+</section>
+
+<section id="chat" class="screen hidden">
+  <header class="top">
+    <button id="btnPeople" class="title" type="button" aria-label="Voir les membres">
+      <span class="logo"><span class="p">pastel prime</span> 🌟</span>
+      <span id="sub" class="sub">…</span>
+    </button>
+    <button id="btnSearch" class="iconbtn" type="button" aria-label="Rechercher">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    </button>
+    <button id="btnSettings" class="iconbtn" type="button" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+    </button>
+  </header>
+  <div id="pinbar" class="pinbar hidden">
+    <button id="pinGo" class="go" type="button"><span class="lbl">📌 Message épinglé</span><span id="pinTxt" class="txt"></span></button>
+    <button id="pinX" class="iconbtn" type="button" aria-label="Désépingler">✕</button>
+  </div>
+  <div id="searchbar" class="searchbar hidden">
+    <input id="inSearch" class="input" type="search" placeholder="Rechercher dans le fil" aria-label="Rechercher dans le fil">
+    <span id="searchCount" class="count"></span>
+    <button id="searchX" class="iconbtn" type="button" aria-label="Fermer la recherche">✕</button>
+  </div>
+  <div class="mainwrap">
+    <div id="scroller" class="scroller">
+      <div id="list" class="list"></div>
+    </div>
+    <button id="fab" class="fab hidden" type="button">↓ <span id="fabN" class="n hidden"></span></button>
+  </div>
+  <div id="typing" class="typing" aria-live="polite"></div>
+  <div class="composer-wrap" style="position:relative">
+    <div id="ctx" class="ctx hidden">
+      <div class="t"><b id="ctxLbl"></b><span id="ctxTxt"></span></div>
+      <button id="ctxX" class="iconbtn" type="button" aria-label="Annuler">✕</button>
+    </div>
+    <div id="emojipop" class="emojipop hidden"></div>
+    <div id="composer" class="composer">
+      <button id="btnEmoji" class="iconbtn" type="button" aria-label="Émojis">😊</button>
+      <textarea id="inMsg" rows="1" maxlength="2000" placeholder="Écris un message…" aria-label="Message"></textarea>
+      <button id="btnSend" class="send" type="button" aria-label="Envoyer" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4 21 12 3.4 3.6l-.1 6.5L15 12 3.3 13.9z"/></svg>
+      </button>
+    </div>
+    <div id="counter" class="counter hidden"></div>
+  </div>
+</section>
+
+<div id="overlay" class="overlay hidden"><div id="sheet" class="sheet" role="dialog" aria-modal="true"></div></div>
+<div id="toast" class="toast hidden" role="status"></div>
+
+<script>
+/* Si le module Firebase ne se charge pas (réseau, filtre), on le dit au lieu de tourner dans le vide. */
+setTimeout(function(){
+  if(!window.__ppStarted){
+    var m=document.getElementById("bootMsg"), s=document.getElementById("bootSpin");
+    if(m) m.textContent="Le chat n’a pas pu se charger. Vérifie ta connexion internet, ou un éventuel contrôle parental qui bloquerait le site, puis recharge la page.";
+    if(s) s.classList.add("hidden");
+  }
+}, 15000);
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+  onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, query, orderBy, limit, startAfter, onSnapshot, getDoc, getDocs,
+  setDoc, updateDoc, addDoc, deleteDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+window.__ppStarted = true;
+
+/* ================= réglages ================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDwmNVdfw8cFwJ-Qx_uKc4rzyHxjPgnF84",
+  authDomain: "pastelprime-de8e1.firebaseapp.com",
+  projectId: "pastelprime-de8e1",
+  storageBucket: "pastelprime-de8e1.firebasestorage.app",
+  messagingSenderId: "683167019445",
+  appId: "1:683167019445:web:add4e4908f694e6b6769fc"
+};
+const DOMAIN = "pastelprime.local";   // les comptes sont créés en « pseudo@pastelprime.local »
+const ADMIN = "hadrien";              // ce pseudo peut supprimer les messages de tout le monde
+const PAGE = 80;                      // messages chargés à la fois
+const MAXLEN = 2000;
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/* ================= utilitaires ================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fold = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+const PALETTE = [
+  {bg:"#ffd1e8",ink:"#a3326e"},{bg:"#cfe6ff",ink:"#2d5f9e"},{bg:"#c9f2e3",ink:"#1f7a5a"},
+  {bg:"#fff0b3",ink:"#8a6a00"},{bg:"#ffd6c9",ink:"#a8482c"},{bg:"#e3d4ff",ink:"#5b3aa6"},
+  {bg:"#d9f5c5",ink:"#4a7a1f"},{bg:"#c8f1f7",ink:"#1d6f7d"}
+];
+const REACTS = ["❤️","😂","👍","😮","😢","🙏"];
+const EMOJIS = ["😊","😂","🥰","😍","😎","🤔","😴","😭","🥺","😅","🙃","😇","🤗","🤩","😡","🤯","👍","👏","🙏","💪","✨","🌟","💖","💜","🌸","🌈","🍓","🧁","🎉","🔥","🐣","🐔"];
+
+const S = {
+  uid:null, pseudo:"", isAdmin:false, typedName:"", createMode:false, inviteCode:"",
+  users:{}, recent:[], older:new Map(), pin:null, noMore:false, loadingOlder:false,
+  usersLoaded:false, msgsLoaded:false, unlocked:false, isNew:false, entryLastRead:null,
+  replyTo:null, editing:null, search:"", lastReadSent:0, typingSentUntil:0,
+  atBottom:true, newWhileAway:0, lastMaxC:0, firstPaint:false, forceBottom:false, anchor:null,
+  unsubs:[], _msgs:[]
+};
+
+function colorOf(uid){
+  const s = S.users[uid];
+  let i = s && Number.isInteger(s.color) ? s.color : -1;
+  if(i < 0 || i >= PALETTE.length){ let h=0; for(const ch of String(uid)) h=(h*31+ch.charCodeAt(0))>>>0; i=h%PALETTE.length; }
+  return PALETTE[i];
+}
+function nameOf(uid, fallback){
+  const s = S.users[uid];
+  if(s && typeof s.name === "string" && s.name) return s.name;
+  return fallback || "Quelqu’un";
+}
+function initials(n){ const p = String(n).trim().split(/[\s._-]+/); return ((p[0]||"?")[0] + (p[1]? p[1][0] : "")).toUpperCase(); }
+function avatar(uid){ const c = colorOf(uid); return `<span class="av" style="background:${c.bg}" aria-hidden="true">${esc(initials(nameOf(uid)))}</span>`; }
+const fmtTime = new Intl.DateTimeFormat("fr-BE",{hour:"2-digit",minute:"2-digit"});
+const fmtDay = new Intl.DateTimeFormat("fr-BE",{weekday:"long",day:"numeric",month:"long"});
+const fmtFull = new Intl.DateTimeFormat("fr-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
+function dayLabel(ts){
+  const d = new Date(ts), t = new Date();
+  const k = x => x.getFullYear()+"-"+x.getMonth()+"-"+x.getDate();
+  if(k(d)===k(t)) return "Aujourd’hui";
+  const y = new Date(t); y.setDate(t.getDate()-1);
+  if(k(d)===k(y)) return "Hier";
+  const s = fmtDay.format(d); return s.charAt(0).toUpperCase()+s.slice(1);
+}
+function ago(ts){
+  if(!ts) return "pas encore venu·e";
+  const m = Math.round((Date.now()-ts)/60000);
+  if(m < 1) return "vu·e à l’instant";
+  if(m < 60) return `vu·e il y a ${m} min`;
+  const h = Math.round(m/60);
+  if(h < 24) return `vu·e il y a ${h} h`;
+  return `vu·e il y a ${Math.round(h/24)} j`;
+}
+let toastT;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.remove("hidden"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.add("hidden"),3500); }
+function show(id){ for(const s of ["boot","login","chat"]) $(s).classList.toggle("hidden", s!==id); }
+function bootMsg(msg, spin){ show("boot"); $("bootMsg").textContent = msg; $("bootSpin").classList.toggle("hidden", !spin); }
+const myRef = () => doc(db, "users", S.uid);
+let stateQ = Promise.resolve();
+function writeMe(patch){ const p = stateQ.catch(()=>{}).then(()=>updateDoc(myRef(), patch)); stateQ = p; return p; }
+
+/* ================= connexion ================= */
+function setStep(n){
+  $("st1").className = "step " + (n===1 ? "on" : "done");
+  $("st2").className = "step " + (n===2 ? "on" : "");
+  $("stepName").classList.toggle("hidden", n!==1);
+  $("stepPass").classList.toggle("hidden", n!==2);
+  $("btnForgot").classList.toggle("hidden", n!==2);
+  $("loginErr").textContent = "";
+  setMode(S.createMode);
+}
+function setMode(create){
+  S.createMode = !!create;
+  const n2 = !$("stepPass").classList.contains("hidden");
+  $("createFields").classList.toggle("hidden", !S.createMode);
+  $("btnMode").textContent = S.createMode ? "J’ai déjà un compte" : "Première fois ici ? Créer mon compte";
+  $("inPass").setAttribute("autocomplete", S.createMode ? "new-password" : "current-password");
+  $("btnForgot").classList.toggle("hidden", !n2 || S.createMode);
+  $("btnLogin").textContent = !n2 ? "Continuer" : (S.createMode ? "Créer mon compte" : "Entrer dans le chat");
+}
+$("btnMode").addEventListener("click", ()=>{ setMode(!S.createMode); $("loginErr").textContent = ""; });
+function showLogin(msg){
+  show("login"); setStep(1);
+  if(msg) $("loginErr").textContent = msg;
+  setTimeout(()=>$("inName").focus(), 50);
+}
+function submitName(){
+  const name = $("inName").value.trim();
+  if(!/^[a-zA-Z0-9._-]{2,20}$/.test(name)){
+    $("loginErr").textContent = "Ton pseudo fait entre 2 et 20 caractères : lettres sans accents, chiffres, point, tiret ou _.";
+    return;
+  }
+  S.typedName = name;
+  $("whoName").textContent = "👋 " + name;
+  $("inPass").value = ""; $("inPass2").value = "";
+  setStep(2);
+  setTimeout(()=>$("inPass").focus(), 50);
+}
+async function submitPass(){
+  const err = $("loginErr"), btn = $("btnLogin");
+  const pw = $("inPass").value;
+  if(!pw){ err.textContent = "Entre ton mot de passe."; return; }
+  const email = S.typedName.toLowerCase() + "@" + DOMAIN;
+  if(S.createMode){
+    if(pw.length < 6){ err.textContent = "Le mot de passe doit faire au moins 6 caractères."; return; }
+    if(pw !== $("inPass2").value){ err.textContent = "Les deux mots de passe ne sont pas identiques."; return; }
+    if(!$("inCode").value.trim()){ err.textContent = "Entre le code du groupe donné par l’animateur."; return; }
+  }
+  S.inviteCode = S.createMode ? $("inCode").value.trim() : "";
+  btn.disabled = true; err.textContent = "";
+  try{
+    await setPersistence(auth, browserSessionPersistence);
+    if(S.createMode){
+      try{ await createUserWithEmailAndPassword(auth, email, pw); }
+      catch(e){
+        if(String(e && e.code || "").includes("email-already-in-use")){
+          try{ await signInWithEmailAndPassword(auth, email, pw); }
+          catch(e2){ throw {code:"taken"}; }
+        }else throw e;
+      }
+    }else{
+      await signInWithEmailAndPassword(auth, email, pw);
+    }
+  }catch(e){
+    const c = e && e.code || "";
+    if(c === "taken") err.textContent = "Ce pseudo est déjà pris. Si c’est le tien, touche « J’ai déjà un compte ».";
+    else if(c.includes("weak-password")) err.textContent = "Ce mot de passe est trop faible. Choisis-en un plus long.";
+    else if(c.includes("too-many-requests")) err.textContent = "Trop d’essais. Patiente quelques minutes avant de réessayer.";
+    else if(c.includes("network")) err.textContent = "Pas de connexion internet. Vérifie ton réseau et réessaie.";
+    else if(c.includes("invalid") || c.includes("wrong-password") || c.includes("user-not-found")) err.textContent = "Pseudo ou mot de passe incorrect.";
+    else if(c.includes("operation-not-allowed") || c.includes("admin-restricted")) err.textContent = "La connexion par mot de passe n’est pas activée dans Firebase.";
+    else err.textContent = "Connexion impossible pour le moment. Réessaie.";
+    $("inPass").select();
+  }finally{ btn.disabled = false; }
+}
+$("loginForm").addEventListener("submit", e => {
+  e.preventDefault();
+  if(!$("stepName").classList.contains("hidden")) submitName(); else submitPass();
+});
+$("btnBack").addEventListener("click", ()=>{ setStep(1); $("inName").focus(); });
+$("btnForgot").addEventListener("click", ()=>{
+  infoSheet("Mot de passe oublié", "Demande à l’animateur du groupe : il peut supprimer ton compte pour que tu le recrées avec le même pseudo et un nouveau mot de passe.");
+});
+
+function applyLoginNote(){
+  const n = S.loginNote; if(!n) return; S.loginNote = null;
+  showLogin(); $("inName").value = n.typed; submitName(); setMode(true);
+  $("loginErr").textContent = n.msg;
+}
+
+/* ================= session ================= */
+onAuthStateChanged(auth, async user => {
+  if(!user){ teardown(); showLogin(); applyLoginNote(); return; }
+  bootMsg("Ouverture du chat…", true);
+  try{ await onSignedIn(user); }
+  catch(e){
+    console.error(e);
+    const code = String(e && e.code || "");
+    if(code === "bad-invite" || code === "need-invite"){
+      S.loginNote = {typed:S.typedName || S.pseudo, msg: code === "bad-invite" ? "Le code du groupe est incorrect. Demande-le à l’animateur." :
+          "Première connexion : remets ton mot de passe deux fois et le code du groupe."};
+      await signOut(auth).catch(()=>{});
+      return;
+    }
+    await signOut(auth).catch(()=>{});
+    showLogin(code.includes("permission") ? "La base de données refuse l’accès. L’animateur doit vérifier les règles de sécurité Firebase." :
+                       "Impossible d’ouvrir le chat. Vérifie ta connexion et réessaie.");
+  }
+});
+
+async function onSignedIn(user){
+  S.uid = user.uid;
+  S.pseudo = (user.email || "").split("@")[0];
+  S.isAdmin = S.pseudo === ADMIN;
+  const snap = await getDoc(myRef());
+  if(!snap.exists()){
+    if(!S.inviteCode) throw {code:"need-invite"};
+    const color = Math.floor(Math.random()*PALETTE.length);
+    const name = S.typedName && S.typedName.toLowerCase() === S.pseudo ? S.typedName : S.pseudo;
+    try{
+      await setDoc(myRef(), {name, color, invite:S.inviteCode, lastRead:0, lastSeen:Date.now(), away:false, typingUntil:0, rx:{}});
+    }catch(e){ throw String(e && e.code || "").includes("permission") ? {code:"bad-invite"} : e; }
+    S.isNew = true; S.entryLastRead = null;
+  }else{
+    S.isNew = false; S.entryLastRead = snap.data().lastRead || 0;
+  }
+  subscribe();
+  enterChat();
+}
+
+function subscribe(){
+  teardownListeners();
+  const slow = setTimeout(()=>{ if(!S.msgsLoaded) toast("Le chargement est lent… Vérifie ta connexion."); }, 10000);
+  S.unsubs.push(onSnapshot(collection(db, "users"), snap => {
+    const o = {}; snap.docs.forEach(d => { o[d.id] = d.data(); });
+    S.users = o; S.usersLoaded = true; scheduleRender();
+  }, e => { toast("Connexion aux membres perdue. Recharge la page."); }));
+  S.unsubs.push(onSnapshot(query(collection(db, "messages"), orderBy("c","desc"), limit(PAGE)), {includeMetadataChanges:true}, snap => {
+    clearTimeout(slow);
+    S.recent = snap.docs.map(toMsg);
+    if(!S.msgsLoaded){ S.msgsLoaded = true; if(snap.docs.length < PAGE) S.noMore = true; }
+    scheduleRender();
+  }, e => { clearTimeout(slow); toast("Connexion aux messages perdue. Recharge la page."); }));
+  S.unsubs.push(onSnapshot(doc(db, "meta", "pin"), snap => { S.pin = snap.exists() ? snap.data() : null; scheduleRender(); }, ()=>{}));
+}
+function toMsg(d){
+  const v = d.data() || {};
+  return { id:d.id, u:String(v.uid||""), n:typeof v.n==="string"?v.n:"", t:typeof v.t==="string"?v.t:"",
+    c:typeof v.c==="number"?v.c:0, e:+v.e||0, d:!!v.d,
+    r:(v.r && typeof v.r==="object" && v.r.id) ? {id:String(v.r.id), u:String(v.r.u||"")} : null,
+    pending:d.metadata.hasPendingWrites };
+}
+function teardownListeners(){ S.unsubs.forEach(u=>{ try{u();}catch(e){} }); S.unsubs = []; }
+function teardown(){
+  teardownListeners(); clearInterval(heartbeat);
+  Object.assign(S, {uid:null, users:{}, recent:[], older:new Map(), pin:null, noMore:false, usersLoaded:false, msgsLoaded:false, unlocked:false, lastReadSent:0, lastMaxC:0});
+  closeSheet(); cancelCtx(); $("inMsg").value = "";
+}
+
+let heartbeat = null;
+function enterChat(){
+  S.unlocked = true;
+  show("chat");
+  S.firstPaint = true;
+  writeMe({lastSeen:Date.now(), away:false}).catch(()=>{});
+  clearInterval(heartbeat);
+  heartbeat = setInterval(()=>{
+    if(document.visibilityState === "visible") writeMe({lastSeen:Date.now(), away:false}).catch(()=>{});
+    renderPresence();
+  }, 120000);
+  scheduleRender();
+}
+async function lock(){
+  try{ await writeMe({lastSeen:Date.now(), away:true, typingUntil:0}); }catch(e){}
+  await signOut(auth).catch(()=>{});
+}
+window.addEventListener("pagehide", ()=>{ if(S.unlocked) writeMe({lastSeen:Date.now(), away:true, typingUntil:0}).catch(()=>{}); });
+document.addEventListener("visibilitychange", ()=>{
+  if(!S.unlocked) return;
+  if(document.visibilityState === "visible"){ writeMe({lastSeen:Date.now(), away:false}).catch(()=>{}); maybeMarkRead(); }
+  else stopTyping();
+});
+
+/* ================= modèle ================= */
+function allMessages(){
+  const map = new Map(S.older);
+  for(const m of S.recent) map.set(m.id, m);
+  return [...map.values()].filter(m=>m.c).sort((a,b)=> a.c-b.c || (a.id<b.id?-1:1));
+}
+function members(){ return Object.keys(S.users); }
+function lastReadOf(uid){ const s=S.users[uid]; return s && typeof s.lastRead==="number" ? s.lastRead : 0; }
+function readersOf(m){ return members().filter(u => u !== m.u && lastReadOf(u) >= m.c); }
+function isOnline(uid){
+  if(uid === S.uid) return S.unlocked;
+  const s = S.users[uid]; return !!(s && !s.away && s.lastSeen && Date.now()-s.lastSeen < 200000);
+}
+function typingNames(){
+  const now = Date.now();
+  return members().filter(u => u !== S.uid && isOnline(u) && (S.users[u].typingUntil||0) > now && (S.users[u].typingUntil||0) < now+20000).map(u=>nameOf(u));
+}
+function reactionsMap(){
+  const map = {};
+  for(const [u, s] of Object.entries(S.users)){
+    const rx = s && s.rx; if(!rx || typeof rx !== "object") continue;
+    for(const [k, e] of Object.entries(rx)){
+      if(typeof e !== "string" || !REACTS.includes(e)) continue;
+      ((map[k] ||= {})[e] ||= []).push(u);
+    }
+  }
+  return map;
+}
+const findMsg = id => S._msgs.find(m=>m.id===id) || null;
+
+/* ================= rendu ================= */
+const URL_RE = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g;
+function renderText(t){
+  const parts = String(t).split(URL_RE);
+  const names = members().map(u=>nameOf(u)).filter(n=>n && n!=="Quelqu’un").sort((a,b)=>b.length-a.length);
+  const mRe = names.length ? new RegExp("@(" + names.map(n=>reEsc(esc(n))).join("|") + ")(?![\\p{L}\\p{N}])", "giu") : null;
+  const q = S.search.trim();
+  let out = "";
+  parts.forEach((p, i) => {
+    if(i % 2 === 1){ out += `<a href="${esc(p)}" target="_blank" rel="noopener noreferrer">${esc(p)}</a>`; return; }
+    let h = esc(p);
+    if(q){
+      const fq = fold(q), fp = fold(p);
+      if(fq && fp.length === p.length){
+        let res = "", idx = 0, at;
+        while((at = fp.indexOf(fq, idx)) !== -1){ res += esc(p.slice(idx, at)) + "<mark>" + esc(p.slice(at, at+fq.length)) + "</mark>"; idx = at + fq.length; }
+        h = res + esc(p.slice(idx));
+      }
+    }else if(mRe){ h = h.replace(mRe, m => `<span class="mention">${m}</span>`); }
+    out += h;
+  });
+  return out;
+}
+function mentionsMe(t){
+  const me = nameOf(S.uid, S.pseudo);
+  return new RegExp("@" + reEsc(me) + "(?![\\p{L}\\p{N}])", "iu").test(t);
+}
+const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s){1,12}$/u;
+function isBigEmoji(t){ return t.length <= 16 && EMOJI_ONLY.test(t) && /\p{Extended_Pictographic}/u.test(t) && !/^[\d#*\s]+$/.test(t); }
+function snippet(m){
+  if(!m) return "Message plus ancien";
+  if(m.d) return "Message supprimé";
+  const t = m.t.replace(/\s+/g," ");
+  return t.length > 90 ? t.slice(0,90)+"…" : t;
+}
+
+let raf = 0;
+function scheduleRender(){ if(raf) return; raf = requestAnimationFrame(()=>{ raf = 0; render(); }); }
+function render(){
+  if(!S.unlocked) return;
+  const msgs = allMessages(); S._msgs = msgs;
+  renderPin(msgs); renderPresence();
+  if(!S.msgsLoaded){ $("list").innerHTML = `<div class="empty"><div class="spinner"></div><p>Chargement des messages…</p></div>`; return; }
+  renderMessages(msgs);
+  updateTitle(msgs);
+  maybeMarkRead();
+}
+function renderPin(msgs){
+  const p = S.pin;
+  const m = p && p.id ? msgs.find(x => x.id === p.id) : null;
+  const visible = !!(p && p.id && !(m && m.d));
+  $("pinbar").classList.toggle("hidden", !visible);
+  if(visible) $("pinTxt").textContent = m ? nameOf(m.u, m.n) + " : " + snippet(m) : (p.s || "Message épinglé");
+}
+function renderPresence(){
+  if(!S.unlocked) return;
+  const names = typingNames(), el = $("typing");
+  if(!names.length) el.innerHTML = "";
+  else{
+    const who = names.length === 1 ? `${esc(names[0])} écrit` : names.length === 2 ? `${esc(names[0])} et ${esc(names[1])} écrivent` : "Plusieurs personnes écrivent";
+    el.innerHTML = `<i><span></span><span></span><span></span></i>${who}…`;
+  }
+  const n = members().length, on = members().filter(isOnline).length;
+  $("sub").innerHTML = `${n} membre${n>1?"s":""} · <span class="dot"></span>${on} en ligne`;
+}
+
+function renderMessages(msgs){
+  const sc = $("scroller"), list = $("list");
+  const wasBottom = S.atBottom, prevTop = sc.scrollTop, prevH = sc.scrollHeight;
+  const q = fold(S.search.trim());
+  const shown = q ? msgs.filter(m => !m.d && fold(m.t).includes(q)) : msgs;
+  $("searchCount").textContent = q ? `${shown.length} résultat${shown.length>1?"s":""}` : "";
+
+  if(!msgs.length){
+    list.innerHTML = `<div class="empty"><div class="big">🌸</div><p><b>Le fil est tout neuf.</b><br>Écris le premier message pour lancer la conversation.</p></div>`;
+    return;
+  }
+  const more = !S.noMore && !q ? `<button type="button" id="btnOlder" class="btn ghost small" style="align-self:center;margin:6px 0 4px">${S.loadingOlder ? "Chargement…" : "Afficher les messages précédents"}</button>` : "";
+  if(q && !shown.length){ list.innerHTML = `<div class="empty"><p>Aucun message chargé ne contient « ${esc(S.search.trim())} ».</p></div>`; return; }
+
+  const rxMap = reactionsMap();
+  const byId = new Map(msgs.map(m=>[m.id,m]));
+  const seenAt = {};
+  if(!q){
+    for(const u of members()){
+      if(u === S.uid) continue;
+      const lr = lastReadOf(u); let last = null;
+      for(const m of msgs){ if(m.c <= lr) last = m; else break; }
+      if(last && last.u !== u) (seenAt[last.id] ||= []).push(u);
+    }
+  }
+  const myLast = [...msgs].reverse().find(m => m.u === S.uid && !m.d);
+  const others = members().filter(u => u !== S.uid);
+  const divAt = S.entryLastRead == null || q ? null : msgs.find(m => m.u !== S.uid && m.c > S.entryLastRead);
+
+  let html = more, prev = null, prevDay = "";
+  shown.forEach((m, i) => {
+    const day = dayLabel(m.c);
+    if(day !== prevDay){ html += `<div class="day">${esc(day)}</div>`; prevDay = day; prev = null; }
+    if(divAt && m.id === divAt.id){ html += `<div class="unread" id="unreadDiv">Nouveaux messages</div>`; prev = null; }
+    const next = shown[i+1];
+    const first = !prev || prev.u !== m.u || (m.c - prev.c) > 5*60000;
+    const last = !next || next.u !== m.u || (next.c - m.c) > 5*60000 || dayLabel(next.c) !== day || (divAt && next.id === divAt.id);
+    const mine = m.u === S.uid;
+    const col = colorOf(m.u);
+    const big = !m.d && isBigEmoji(m.t);
+    let cls = `row ${mine?"mine":"theirs"}${first?" first":""}${last?" last":""}${big?" big-emoji":""}`;
+    if(!mine && !m.d && mentionsMe(m.t)) cls += " mentions-me";
+
+    let quote = "";
+    if(m.r && !m.d){
+      const o = byId.get(m.r.id); const qc = colorOf(m.r.u);
+      quote = `<span class="quote" data-jump="${esc(m.r.id)}" style="--q:${qc.ink}"><b style="color:${qc.ink}">${esc(nameOf(m.r.u, o && o.n))}</b><span>${esc(snippet(o))}</span></span>`;
+    }
+    let ticks = "";
+    if(mine && !m.d){
+      if(m.pending) ticks = `<span class="ticks" title="Envoi…">🕓</span>`;
+      else{
+        const rd = readersOf(m);
+        const all = others.length > 0 && rd.length >= others.length;
+        ticks = rd.length ? `<span class="ticks${all?" all":""}" title="Lu">✓✓</span>` : `<span class="ticks" title="Envoyé">✓</span>`;
+      }
+    }
+    const body = m.d ? `<div class="text deleted">🚫 Message supprimé</div>` : `${quote}<div class="text">${renderText(m.t)}</div>`;
+    const meta = `<div class="meta">${m.e && !m.d ? "<span>modifié</span>" : ""}<span>${fmtTime.format(new Date(m.c))}</span>${ticks}</div>`;
+
+    let chips = "";
+    const rx = rxMap[m.id];
+    if(rx && !m.d){
+      chips = `<div class="chips">` + REACTS.filter(e=>rx[e]).map(e => {
+        const us = rx[e]; const meIn = us.includes(S.uid);
+        return `<button type="button" class="chip${meIn?" me":""}" data-react="${esc(m.id)}" data-e="${e}" title="${esc(us.map(u=>nameOf(u)).join(", "))}">${e}<small>${us.length}</small></button>`;
+      }).join("") + `</div>`;
+    }
+    let seen = "";
+    const sa = seenAt[m.id];
+    if(mine && myLast && m.id === myLast.id && !m.pending){
+      const rd = readersOf(m);
+      if(rd.length){
+        const label = others.length > 1 && rd.length >= others.length ? "Vu par tout le monde" : "Vu par " + rd.map(u=>nameOf(u)).join(", ");
+        seen = `<button type="button" class="seen" data-info="${esc(m.id)}"><span class="lbl">${esc(label)}</span></button>`;
+      }
+    }else if(sa && sa.length){
+      seen = `<button type="button" class="seen" data-info="${esc(m.id)}" aria-label="Vu par ${esc(sa.map(u=>nameOf(u)).join(", "))}">${sa.slice(0,6).map(avatar).join("")}${sa.length>6?`<span class="lbl">+${sa.length-6}</span>`:""}</button>`;
+    }
+    const av = `<span class="av" style="background:${col.bg}" aria-hidden="true">${esc(initials(nameOf(m.u, m.n)))}</span>`;
+    html += `<div class="${cls}" data-id="${esc(m.id)}">`
+      + (mine ? "" : (last ? av : `<span class="av ghost"></span>`))
+      + `<div class="col">`
+      + (!mine && first ? `<div class="name" style="color:${col.ink}">${esc(nameOf(m.u, m.n))}</div>` : "")
+      + `<div class="bubble" role="button" tabindex="0" style="${mine?`--mine-bg:${col.bg}`:""}" aria-label="Message de ${esc(nameOf(m.u, m.n))}, options">${body}${meta}</div>`
+      + chips + seen + `</div></div>`;
+    prev = m;
+  });
+  list.innerHTML = html;
+
+  const maxC = msgs[msgs.length-1].c;
+  const newest = msgs[msgs.length-1];
+  if(S.anchor){ sc.scrollTop = prevTop + (sc.scrollHeight - prevH); S.anchor = null; updateBottom(); }
+  else if(S.firstPaint){
+    S.firstPaint = false;
+    const d = $("unreadDiv");
+    if(d){ d.scrollIntoView({block:"center"}); updateBottom(); } else scrollBottom();
+  }else if(S.forceBottom || (wasBottom && !q)){ S.forceBottom = false; scrollBottom(); }
+  else{
+    sc.scrollTop = prevTop;
+    if(maxC > S.lastMaxC && newest.u !== S.uid && S.lastMaxC) S.newWhileAway++;
+  }
+  S.lastMaxC = Math.max(S.lastMaxC, maxC);
+  updateFab();
+}
+
+function scrollBottom(){ const sc=$("scroller"); sc.scrollTop = sc.scrollHeight; S.atBottom = true; S.newWhileAway = 0; updateFab(); }
+function updateBottom(){ const sc=$("scroller"); S.atBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80; if(S.atBottom) S.newWhileAway = 0; updateFab(); }
+function updateFab(){ $("fab").classList.toggle("hidden", S.atBottom); $("fabN").classList.toggle("hidden", !S.newWhileAway); $("fabN").textContent = S.newWhileAway; }
+let scrollT = 0;
+$("scroller").addEventListener("scroll", ()=>{ updateBottom(); clearTimeout(scrollT); scrollT = setTimeout(maybeMarkRead, 400); }, {passive:true});
+$("fab").addEventListener("click", scrollBottom);
+
+function updateTitle(msgs){
+  const lr = Math.max(lastReadOf(S.uid), S.lastReadSent);
+  const n = msgs.filter(m => m.u !== S.uid && m.c > lr && !m.d).length;
+  document.title = (n ? `(${n}) ` : "") + "pastel prime 🌟";
+}
+
+async function loadOlder(){
+  if(S.loadingOlder || S.noMore) return;
+  const msgs = S._msgs; if(!msgs.length) return;
+  S.loadingOlder = true; scheduleRender();
+  try{
+    const snap = await getDocs(query(collection(db, "messages"), orderBy("c","desc"), startAfter(msgs[0].c), limit(PAGE)));
+    snap.docs.forEach(d => S.older.set(d.id, toMsg(d)));
+    if(snap.docs.length < PAGE) S.noMore = true;
+    S.anchor = true;
+  }catch(e){ toast("Impossible de charger les messages précédents."); }
+  S.loadingOlder = false; scheduleRender();
+}
+
+/* accusés de lecture : on enregistre jusqu'où on a lu, sans écrire à chaque mouvement */
+let readT = 0;
+function maybeMarkRead(){
+  if(!S.unlocked || !S.users[S.uid]) return;
+  if(document.visibilityState !== "visible" || !S.atBottom || S.search) return;
+  const msgs = S._msgs; if(!msgs.length) return;
+  const latest = msgs[msgs.length-1].c;
+  if(latest <= Math.max(lastReadOf(S.uid), S.lastReadSent)) return;
+  clearTimeout(readT);
+  readT = setTimeout(()=>{
+    if(latest <= Math.max(lastReadOf(S.uid), S.lastReadSent)) return;
+    S.lastReadSent = latest; updateTitle(S._msgs);
+    writeMe({lastRead: latest, lastSeen: Date.now(), away:false}).catch(()=>{ S.lastReadSent = 0; });
+  }, 1200);
+}
+window.addEventListener("focus", maybeMarkRead);
+
+/* ================= écriture ================= */
+const inMsg = $("inMsg");
+const coarse = window.matchMedia && matchMedia("(pointer: coarse)").matches;
+function autosize(){ inMsg.style.height = "auto"; inMsg.style.height = Math.min(inMsg.scrollHeight+4, 140) + "px"; }
+function refreshSend(){
+  $("btnSend").disabled = !inMsg.value.trim();
+  const over = inMsg.value.length > MAXLEN - 100;
+  $("counter").classList.toggle("hidden", !over);
+  if(over) $("counter").textContent = `${inMsg.value.length} / ${MAXLEN}`;
+}
+inMsg.addEventListener("input", ()=>{ autosize(); refreshSend(); typingPing(); });
+inMsg.addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey && !coarse && !e.isComposing){ e.preventDefault(); send(); }
+  else if(e.key === "Escape") cancelCtx();
+  else if(e.key === "ArrowUp" && !inMsg.value && !S.editing){
+    const mine = S._msgs.filter(m=>m.u===S.uid && !m.d).pop();
+    if(mine){ e.preventDefault(); startEdit(mine.id); }
+  }
+});
+$("btnSend").addEventListener("click", ()=>{ send(); inMsg.focus(); });
+
+function typingPing(){
+  if(!S.unlocked) return;
+  if(!inMsg.value.trim() || S.editing){ stopTyping(); return; }
+  const now = Date.now();
+  if(S.typingSentUntil - now < 2500){ S.typingSentUntil = now + 7000; writeMe({typingUntil:S.typingSentUntil}).catch(()=>{}); }
+}
+function stopTyping(){
+  if(S.typingSentUntil > Date.now()){ S.typingSentUntil = 0; writeMe({typingUntil:0}).catch(()=>{}); }
+}
+setInterval(renderPresence, 3000);
+
+async function send(){
+  const text = inMsg.value.replace(/\s+$/,"").replace(/^\n+/,"");
+  if(!text.trim()) return;
+  if(text.length > MAXLEN){ toast(`Ton message dépasse ${MAXLEN} caractères.`); return; }
+  stopTyping();
+  if(S.editing){
+    const m = findMsg(S.editing);
+    cancelCtx(); inMsg.value = ""; autosize(); refreshSend();
+    if(!m || m.u !== S.uid || m.t === text) return;
+    try{ await updateDoc(doc(db, "messages", m.id), {t:text, e:Date.now()}); }
+    catch(e){ toast("La modification n’a pas été enregistrée. Réessaie."); }
+    return;
+  }
+  const last = S._msgs.length ? S._msgs[S._msgs.length-1].c : 0;
+  const c = Math.max(Date.now(), last + 1);
+  const msg = {uid:S.uid, n:S.pseudo, t:text, c};
+  if(S.replyTo){ const o = findMsg(S.replyTo); if(o) msg.r = {id:o.id, u:o.u}; }
+  const backup = text;
+  cancelCtx(); inMsg.value = ""; autosize(); refreshSend();
+  S.forceBottom = true;
+  try{
+    await addDoc(collection(db, "messages"), msg);
+    S.lastReadSent = Math.max(S.lastReadSent, c);
+    writeMe({lastRead: Math.max(c, lastReadOf(S.uid)), lastSeen: Date.now(), away:false}).catch(()=>{});
+  }catch(e){
+    if(!inMsg.value){ inMsg.value = backup; autosize(); refreshSend(); }
+    const c2 = String(e && e.code || "");
+    toast(c2.includes("permission") ? "Message refusé : vérifie l’heure de ton téléphone, puis réessaie." :
+          c2.includes("resource-exhausted") ? "Le chat a atteint sa limite gratuite du jour. Réessaie demain." :
+          "Message non envoyé. Vérifie ta connexion puis réessaie.");
+  }
+}
+
+function startReply(id){
+  const m = findMsg(id); if(!m) return;
+  S.editing = null; S.replyTo = id;
+  $("ctxLbl").textContent = "Répondre à " + nameOf(m.u, m.n);
+  $("ctxTxt").textContent = snippet(m);
+  $("ctx").classList.remove("hidden"); inMsg.focus();
+}
+function startEdit(id){
+  const m = findMsg(id); if(!m || m.u !== S.uid || m.d) return;
+  S.replyTo = null; S.editing = id;
+  $("ctxLbl").textContent = "Modifier ton message";
+  $("ctxTxt").textContent = snippet(m);
+  $("ctx").classList.remove("hidden");
+  inMsg.value = m.t; autosize(); refreshSend();
+  inMsg.focus(); inMsg.setSelectionRange(inMsg.value.length, inMsg.value.length);
+}
+function cancelCtx(){
+  const wasEditing = !!S.editing;
+  S.replyTo = null; S.editing = null; $("ctx").classList.add("hidden");
+  if(wasEditing){ inMsg.value = ""; autosize(); refreshSend(); }
+}
+$("ctxX").addEventListener("click", cancelCtx);
+
+$("emojipop").innerHTML = EMOJIS.map(e=>`<button type="button" data-emo="${e}">${e}</button>`).join("");
+$("btnEmoji").addEventListener("click", e => { e.stopPropagation(); $("emojipop").classList.toggle("hidden"); });
+$("emojipop").addEventListener("click", e => {
+  const b = e.target.closest("[data-emo]"); if(!b) return;
+  const s = inMsg.selectionStart ?? inMsg.value.length, en = inMsg.selectionEnd ?? s;
+  inMsg.value = inMsg.value.slice(0,s) + b.dataset.emo + inMsg.value.slice(en);
+  const p = s + b.dataset.emo.length; inMsg.focus(); inMsg.setSelectionRange(p,p);
+  autosize(); refreshSend();
+});
+document.addEventListener("click", e => { if(!e.target.closest("#emojipop") && !e.target.closest("#btnEmoji")) $("emojipop").classList.add("hidden"); });
+
+/* ================= actions sur les messages ================= */
+$("list").addEventListener("click", e => {
+  if(e.target.closest("a")) return;
+  if(e.target.closest("#btnOlder")){ loadOlder(); return; }
+  const chip = e.target.closest("[data-react]"); if(chip){ setReact(chip.dataset.react, chip.dataset.e); return; }
+  const info = e.target.closest("[data-info]"); if(info){ openInfo(info.dataset.info); return; }
+  const jump = e.target.closest("[data-jump]"); if(jump){ jumpTo(jump.dataset.jump); return; }
+  const bub = e.target.closest(".bubble");
+  if(bub){
+    const sel = window.getSelection && String(window.getSelection());
+    if(sel && sel.length > 0) return;
+    openActions(bub.closest(".row").dataset.id);
+  }
+});
+$("list").addEventListener("keydown", e => {
+  if((e.key === "Enter" || e.key === " ") && e.target.classList.contains("bubble")){ e.preventDefault(); openActions(e.target.closest(".row").dataset.id); }
+});
+function jumpTo(id){
+  if(S.search) closeSearch();
+  requestAnimationFrame(()=>{
+    const row = document.querySelector(`.row[data-id="${CSS.escape(id)}"]`);
+    if(!row){ toast("Ce message est plus ancien : touche « Afficher les messages précédents »."); return; }
+    row.scrollIntoView({block:"center", behavior:"smooth"});
+    const b = row.querySelector(".bubble"); b.classList.remove("flash"); void b.offsetWidth; b.classList.add("flash");
+  });
+}
+function myReaction(id){ const s=S.users[S.uid]; return s && s.rx && typeof s.rx[id]==="string" ? s.rx[id] : ""; }
+function setReact(id, emoji){
+  const val = myReaction(id) === emoji ? "" : emoji;
+  const st = S.users[S.uid];
+  if(st) S.users[S.uid] = Object.assign({}, st, {rx:Object.assign({}, st.rx, {[id]:val})});
+  scheduleRender();
+  writeMe({["rx." + id]: val ? val : deleteField()}).catch(()=>toast("La réaction n’a pas été enregistrée."));
+}
+
+function openSheet(html){
+  $("sheet").innerHTML = `<div class="grab"></div>` + html;
+  $("overlay").classList.remove("hidden");
+  const f = $("sheet").querySelector("button,input"); if(f && !coarse) f.focus();
+}
+function closeSheet(){ $("overlay").classList.add("hidden"); $("sheet").innerHTML = ""; }
+$("overlay").addEventListener("click", e => { if(e.target === $("overlay")) closeSheet(); });
+document.addEventListener("keydown", e => { if(e.key === "Escape" && !$("overlay").classList.contains("hidden")) closeSheet(); });
+function infoSheet(title, body){
+  openSheet(`<h2>${esc(title)}</h2><p class="muted" style="margin:0">${esc(body)}</p><button class="btn ghost" type="button" data-x>Fermer</button>`);
+  $("sheet").querySelector("[data-x]").onclick = closeSheet;
+}
+function confirmSheet({title, body, ok, danger, run}){
+  openSheet(`<h2>${esc(title)}</h2><p class="muted" style="margin:0">${esc(body)}</p>
+    <div class="row-btns"><button class="btn ghost" type="button" data-x>Annuler</button><button class="btn ${danger?"danger":""}" type="button" data-ok>${esc(ok)}</button></div>`);
+  $("sheet").querySelector("[data-x]").onclick = closeSheet;
+  $("sheet").querySelector("[data-ok]").onclick = async ()=>{ closeSheet(); await run(); };
+}
+
+function openActions(id){
+  const m = findMsg(id); if(!m) return;
+  const mine = m.u === S.uid;
+  const pinned = S.pin && S.pin.id === m.id;
+  const my = myReaction(id);
+  let h = `<div class="preview"><b>${esc(nameOf(m.u, m.n))}</b> · ${fmtTime.format(new Date(m.c))}<br>${m.d ? "<i>Message supprimé</i>" : esc(m.t)}</div>`;
+  if(!m.d) h += `<div class="rx">${REACTS.map(e=>`<button type="button" class="${my===e?"on":""}" data-r="${e}" aria-label="Réagir ${e}">${e}</button>`).join("")}</div>`;
+  h += `<div class="acts">`;
+  if(!m.d) h += `<button type="button" data-a="reply"><span class="ic">↩️</span>Répondre</button>`;
+  if(!m.d) h += `<button type="button" data-a="copy"><span class="ic">📋</span>Copier le texte</button>`;
+  if(mine && !m.d) h += `<button type="button" data-a="edit"><span class="ic">✏️</span>Modifier</button>`;
+  if(!m.d) h += `<button type="button" data-a="pin"><span class="ic">📌</span>${pinned?"Désépingler":"Épingler"}</button>`;
+  h += `<button type="button" data-a="info"><span class="ic">👀</span>Qui a lu ce message</button>`;
+  if(mine && !m.d) h += `<button type="button" class="red" data-a="del"><span class="ic">🗑️</span>Supprimer pour tout le monde</button>`;
+  if(!mine && !m.d && S.isAdmin) h += `<button type="button" class="red" data-a="mod"><span class="ic">🛡️</span>Supprimer (animateur)</button>`;
+  h += `</div>`;
+  openSheet(h);
+  const sh = $("sheet");
+  sh.querySelectorAll("[data-r]").forEach(b => b.onclick = ()=>{ closeSheet(); setReact(id, b.dataset.r); });
+  sh.querySelectorAll("[data-a]").forEach(b => b.onclick = ()=>{
+    const a = b.dataset.a;
+    if(a === "copy"){
+      const p = navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(m.t) : Promise.reject();
+      p.then(()=>toast("Texte copié.")).catch(()=>toast("La copie n’a pas marché : sélectionne le texte pour le copier."));
+      closeSheet(); return;
+    }
+    closeSheet();
+    if(a === "reply") startReply(id);
+    else if(a === "edit") startEdit(id);
+    else if(a === "info") openInfo(id);
+    else if(a === "pin") togglePin(m, pinned);
+    else if(a === "del") confirmSheet({title:"Supprimer ce message ?", body:"Il sera remplacé par « Message supprimé » pour tout le monde.", ok:"Supprimer", danger:true, run:()=>deleteMsg(m)});
+    else if(a === "mod") confirmSheet({title:"Supprimer le message de "+nameOf(m.u, m.n)+" ?", body:"En tant qu’animateur, tu peux retirer ce message pour tout le monde.", ok:"Supprimer", danger:true, run:()=>deleteMsg(m)});
+  });
+}
+async function deleteMsg(m){
+  if(S.editing === m.id || S.replyTo === m.id) cancelCtx();
+  try{
+    await updateDoc(doc(db, "messages", m.id), {t:"", d:true, r:deleteField()});
+    if(S.pin && S.pin.id === m.id) await deleteDoc(doc(db, "meta", "pin"));
+  }catch(e){ toast("La suppression n’a pas pu être faite. Réessaie."); }
+}
+async function togglePin(m, pinned){
+  try{
+    if(pinned) await deleteDoc(doc(db, "meta", "pin"));
+    else await setDoc(doc(db, "meta", "pin"), {id:m.id, s:snippet(m).slice(0,90), by:S.uid, at:Date.now()});
+    toast(pinned ? "Message désépinglé." : "Message épinglé en haut du fil.");
+  }catch(e){ toast("Impossible de modifier l’épingle."); }
+}
+$("pinGo").addEventListener("click", ()=>{ if(S.pin) jumpTo(S.pin.id); });
+$("pinX").addEventListener("click", ()=>{ deleteDoc(doc(db, "meta", "pin")).catch(()=>toast("Impossible de désépingler.")); });
+
+function personRow(u, extra){
+  const s = S.users[u] || {};
+  const status = isOnline(u) ? `<span class="dot"></span>en ligne` : esc(ago(s.lastSeen));
+  return `<div class="person">${avatar(u)}<div><div class="n">${esc(nameOf(u))}${u===S.uid?" <span class='muted'>(toi)</span>":""}${(S.users[u]&&S.users[u].name||"").toLowerCase()===ADMIN?" <span class='muted'>· animateur</span>":""}</div><div class="s">${status}</div></div>${extra||""}</div>`;
+}
+function openInfo(id){
+  const m = findMsg(id); if(!m) return;
+  const rd = readersOf(m);
+  const notYet = members().filter(u => u !== m.u && !rd.includes(u));
+  openSheet(`<h2>Infos du message</h2>
+    <div class="preview">${m.d ? "<i>Message supprimé</i>" : esc(m.t)}</div>
+    <dl class="kv"><dt>De</dt><dd>${esc(nameOf(m.u, m.n))}</dd><dt>Envoyé</dt><dd>${esc(fmtFull.format(new Date(m.c)))}</dd>
+    ${m.e && !m.d ? `<dt>Modifié</dt><dd>${esc(fmtFull.format(new Date(m.e)))}</dd>` : ""}</dl>
+    <h3>✓✓ Lu par (${rd.length})</h3>
+    <div class="people">${rd.length ? rd.map(u=>personRow(u)).join("") : `<p class="muted" style="margin:0">Personne ne l’a encore lu.</p>`}</div>
+    <h3>Pas encore lu (${notYet.length})</h3>
+    <div class="people">${notYet.length ? notYet.map(u=>personRow(u)).join("") : `<p class="muted" style="margin:0">Tout le monde l’a lu 🎉</p>`}</div>
+    <p class="note">Seules les personnes qui ont déjà ouvert le chat au moins une fois apparaissent ici.</p>
+    <button class="btn ghost" type="button" data-x>Fermer</button>`);
+  $("sheet").querySelector("[data-x]").onclick = closeSheet;
+}
+$("btnPeople").addEventListener("click", ()=>{
+  const us = members().sort((a,b)=> (isOnline(b)-isOnline(a)) || nameOf(a).localeCompare(nameOf(b),"fr"));
+  const typing = new Set(typingNames());
+  openSheet(`<h2>Membres (${us.length})</h2>
+    <div class="people">${us.map(u=>personRow(u, typing.has(nameOf(u)) ? `<span class="meinfo">écrit…</span>` : "")).join("")}</div>
+    <button class="btn ghost" type="button" data-x>Fermer</button>`);
+  $("sheet").querySelector("[data-x]").onclick = closeSheet;
+});
+
+/* ================= recherche ================= */
+$("btnSearch").addEventListener("click", ()=>{
+  const sb = $("searchbar");
+  if(sb.classList.contains("hidden")){ sb.classList.remove("hidden"); $("inSearch").focus(); } else closeSearch();
+});
+let searchT = 0;
+$("inSearch").addEventListener("input", ()=>{ clearTimeout(searchT); searchT = setTimeout(()=>{ S.search = $("inSearch").value; S.forceBottom = true; scheduleRender(); }, 150); });
+$("searchX").addEventListener("click", closeSearch);
+function closeSearch(){ $("searchbar").classList.add("hidden"); $("inSearch").value = ""; S.search = ""; S.forceBottom = true; scheduleRender(); }
+
+/* ================= réglages ================= */
+$("btnSettings").addEventListener("click", ()=>{
+  const me = S.users[S.uid] || {};
+  const ci = Number.isInteger(me.color) ? me.color : -1;
+  openSheet(`<h2>${esc(nameOf(S.uid, S.pseudo))}</h2>
+    <h3>Couleur de tes bulles</h3>
+    <div class="swatches">${PALETTE.map((p,i)=>`<button type="button" class="swatch${i===ci?" on":""}" data-c="${i}" style="background:${p.bg}" aria-label="Couleur ${i+1}"></button>`).join("")}</div>
+    <h3>Changer de mot de passe</h3>
+    <div class="field"><label for="pwOld">Mot de passe actuel</label><input id="pwOld" class="input" type="password" autocomplete="current-password"></div>
+    <div class="field"><label for="pwNew">Nouveau mot de passe</label><input id="pwNew" class="input" type="password" autocomplete="new-password"></div>
+    <div class="field"><label for="pwNew2">Confirme le nouveau</label><input id="pwNew2" class="input" type="password" autocomplete="new-password"></div>
+    <p id="pwErr" class="err"></p>
+    <button id="pwSave" class="btn small" type="button">Enregistrer le mot de passe</button>
+    <h3>Session</h3>
+    <button id="btnLock" class="btn ghost" type="button">🔒 Verrouiller le chat</button>
+    <p class="note">Le chat redemandera ton pseudo et ton mot de passe. Il se verrouille aussi quand tu fermes l’onglet.</p>`);
+  const sh = $("sheet");
+  sh.querySelectorAll("[data-c]").forEach(b => b.onclick = ()=>{
+    const c = +b.dataset.c;
+    sh.querySelectorAll(".swatch").forEach(x=>x.classList.toggle("on", x===b));
+    if(S.users[S.uid]) S.users[S.uid] = Object.assign({}, S.users[S.uid], {color:c});
+    scheduleRender();
+    writeMe({color:c}).catch(()=>toast("La couleur n’a pas été enregistrée."));
+  });
+  $("btnLock").onclick = ()=>{ closeSheet(); lock(); };
+  $("pwSave").onclick = async ()=>{
+    const err = $("pwErr"); err.textContent = "";
+    const o = $("pwOld").value, n = $("pwNew").value, n2 = $("pwNew2").value;
+    if(n.length < 6){ err.textContent = "Le nouveau mot de passe doit faire au moins 6 caractères."; return; }
+    if(n !== n2){ err.textContent = "Les deux nouveaux mots de passe ne sont pas identiques."; return; }
+    $("pwSave").disabled = true;
+    try{
+      const u = auth.currentUser;
+      await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, o));
+      await updatePassword(u, n);
+      closeSheet(); toast("Mot de passe changé.");
+    }catch(e){
+      const c = String(e && e.code || "");
+      err.textContent = c.includes("invalid") || c.includes("wrong") ? "Le mot de passe actuel est incorrect." :
+                        c.includes("weak") ? "Ce mot de passe est trop faible." : "Impossible d’enregistrer. Réessaie.";
+    }finally{ const b=$("pwSave"); if(b) b.disabled = false; }
+  };
+});
+</script>
+</body>
+</html>
