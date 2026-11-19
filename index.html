@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>pastel prime 🌟</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="pastel prime">
+<meta name="theme-color" content="#b48cf2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="pastel prime">
+<meta name="theme-color" content="#9d74ea">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -192,6 +201,9 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
 .viewer .vbar a,.viewer .vbar button{color:#fff;background:rgba(255,255,255,.14);border:0;border-radius:12px;padding:10px 14px;font-weight:800;text-decoration:none;font-size:.95rem}
 .viewer .vimg{flex:1;display:grid;place-items:center;min-height:0;padding:8px}
 .viewer .vimg img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+.toggle{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;font-weight:700}
+.toggle input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.notifstate{font-size:.88rem;color:var(--muted);margin:0}
 .readonly{max-width:760px;margin:0 auto;padding:10px;text-align:center;color:var(--muted);font-size:.9rem;font-weight:700}
 
 /* ---------- sheets ---------- */
@@ -394,7 +406,7 @@ const REACTS = ["❤️","😂","👍","😮","😢","🙏"];
 const EMOJIS = ["😊","😂","🥰","😍","😎","🤔","😴","😭","🥺","😅","🙃","😇","🤗","🤩","😡","🤯","👍","👏","🙏","💪","✨","🌟","💖","💜","🌸","🌈","🍓","🧁","🎉","🔥","🐣","🐔"];
 
 const S = {
-  uid:null, pseudo:"", isAdmin:false, typedName:"", createMode:false, inviteCode:"", photo:null,
+  uid:null, pseudo:"", isAdmin:false, typedName:"", createMode:false, inviteCode:"", photo:null, notifyFrom:0, notified:new Set(),
   users:{}, recent:[], older:new Map(), pin:null, noMore:false, loadingOlder:false,
   usersLoaded:false, msgsLoaded:false, unlocked:false, isNew:false, entryLastRead:null,
   replyTo:null, editing:null, search:"", lastReadSent:0, typingSentUntil:0,
@@ -574,6 +586,7 @@ async function onSignedIn(user){
 
 function subscribe(){
   teardownListeners();
+  S.notifyFrom = Date.now() - 20000; S.notified = new Set();
   const slow = setTimeout(()=>{ if(!S.msgsLoaded) toast("Le chargement est lent… Vérifie ta connexion."); }, 10000);
   S.unsubs.push(onSnapshot(collection(db, "users"), snap => {
     const o = {}; snap.docs.forEach(d => { o[d.id] = d.data(); });
@@ -582,6 +595,13 @@ function subscribe(){
   S.unsubs.push(onSnapshot(query(collection(db, "messages"), orderBy("c","desc"), limit(PAGE)), {includeMetadataChanges:true}, snap => {
     clearTimeout(slow);
     S.recent = snap.docs.map(toMsg);
+    if(S.msgsLoaded && typeof snap.docChanges === "function"){
+      for(const ch of snap.docChanges()){
+        if(ch.type !== "added") continue;
+        const m = toMsg(ch.doc);
+        if(!m.pending && m.u !== S.uid && m.c > S.notifyFrom && !S.notified.has(m.id)){ S.notified.add(m.id); onNewMessage(m); }
+      }
+    }
     if(!S.msgsLoaded){ S.msgsLoaded = true; if(snap.docs.length < PAGE) S.noMore = true; }
     scheduleRender();
   }, e => { clearTimeout(slow); toast("Connexion aux messages perdue. Recharge la page."); }));
@@ -597,7 +617,7 @@ function toMsg(d){
 }
 function teardownListeners(){ S.unsubs.forEach(u=>{ try{u();}catch(e){} }); S.unsubs = []; }
 function teardown(){
-  teardownListeners(); clearInterval(heartbeat);
+  teardownListeners(); clearInterval(heartbeat); setBadge(0);
   Object.assign(S, {uid:null, users:{}, recent:[], older:new Map(), pin:null, noMore:false, usersLoaded:false, msgsLoaded:false, unlocked:false, lastReadSent:0, lastMaxC:0});
   closeSheet(); cancelCtx(); $("inMsg").value = "";
 }
@@ -608,6 +628,12 @@ function enterChat(){
   show("chat");
   S.firstPaint = true;
   writeMe({lastSeen:Date.now(), away:false}).catch(()=>{});
+  try{
+    if(!localStorage.getItem("pp_notif_hint")){
+      const need = notifSupported ? Notification.permission === "default" : (isIOS && !isStandalone);
+      if(need){ localStorage.setItem("pp_notif_hint","1"); setTimeout(()=>toast("🔔 Pour être prévenu des nouveaux messages, touche 👤 en haut à droite."), 1500); }
+    }
+  }catch(e){}
   clearInterval(heartbeat);
   heartbeat = setInterval(()=>{
     if(document.visibilityState === "visible") writeMe({lastSeen:Date.now(), away:false}).catch(()=>{});
@@ -850,6 +876,7 @@ function updateTitle(msgs){
   const lr = Math.max(lastReadOf(S.uid), S.lastReadSent);
   const n = msgs.filter(m => m.u !== S.uid && m.c > lr && !m.d).length;
   document.title = (n ? `(${n}) ` : "") + "pastel prime 🌟";
+  setBadge(n);
 }
 
 async function loadOlder(){
@@ -863,6 +890,72 @@ async function loadOlder(){
     S.anchor = true;
   }catch(e){ toast("Impossible de charger les messages précédents."); }
   S.loadingOlder = false; scheduleRender();
+}
+
+/* ================= notifications ================= */
+const NOTIF = {
+  get on(){ try{ return localStorage.getItem("pp_notif") !== "off"; }catch(e){ return true; } },
+  set on(v){ try{ localStorage.setItem("pp_notif", v ? "on" : "off"); }catch(e){} },
+  get sound(){ try{ return localStorage.getItem("pp_sound") !== "off"; }catch(e){ return true; } },
+  set sound(v){ try{ localStorage.setItem("pp_sound", v ? "on" : "off"); }catch(e){} },
+  get mentions(){ try{ return localStorage.getItem("pp_mentions") === "on"; }catch(e){ return false; } },
+  set mentions(v){ try{ localStorage.setItem("pp_mentions", v ? "on" : "off"); }catch(e){} },
+  get preview(){ try{ return localStorage.getItem("pp_preview") !== "off"; }catch(e){ return true; } },
+  set preview(v){ try{ localStorage.setItem("pp_preview", v ? "on" : "off"); }catch(e){} }
+};
+let swReg = null;
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").then(r => { swReg = r; }).catch(()=>{});
+}
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+const notifSupported = "Notification" in window;
+function notifStatus(){
+  if(!notifSupported){
+    return isIOS && !isStandalone
+      ? "Sur iPhone : ajoute d’abord le chat à l’écran d’accueil (bouton Partager, puis « Sur l’écran d’accueil »), ouvre-le depuis l’icône, puis reviens ici."
+      : "Ce navigateur ne permet pas les notifications.";
+  }
+  if(Notification.permission === "granted") return NOTIF.on ? "Notifications activées." : "Notifications coupées.";
+  if(Notification.permission === "denied") return "Les notifications sont bloquées pour ce site. Autorise-les dans les réglages de ton navigateur.";
+  return "Notifications pas encore activées.";
+}
+async function askNotif(){
+  if(!notifSupported) return;
+  try{ await Notification.requestPermission(); }catch(e){}
+  if(Notification.permission === "granted"){ NOTIF.on = true; showNotif("pastel prime 🌟", "Les notifications sont activées !"); }
+}
+function showNotif(title, body){
+  const opts = {body, icon:"icon-192.png", badge:"icon-192.png", tag:"pastel-prime", renotify:true};
+  if(swReg && swReg.showNotification) return swReg.showNotification(title, opts).catch(()=>{});
+  try{ const n = new Notification(title, opts); n.onclick = ()=>{ window.focus(); n.close(); }; }catch(e){}
+}
+let audioCtx = null;
+document.addEventListener("pointerdown", ()=>{ try{ audioCtx ||= new (window.AudioContext || window.webkitAudioContext)(); if(audioCtx.state === "suspended") audioCtx.resume(); }catch(e){} }, {passive:true});
+function ding(){
+  if(!NOTIF.sound || !audioCtx) return;
+  try{
+    const t = audioCtx.currentTime;
+    [[880,0],[1318.5,0.12]].forEach(([f,dt]) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t+dt); g.gain.exponentialRampToValueAtTime(0.18, t+dt+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+dt+0.35);
+      o.connect(g).connect(audioCtx.destination); o.start(t+dt); o.stop(t+dt+0.4);
+    });
+  }catch(e){}
+}
+function onNewMessage(m){
+  const away = document.visibilityState !== "visible" || !document.hasFocus();
+  if(!away){ if(!S.atBottom) ding(); return; }
+  ding();
+  if(!NOTIF.on || !notifSupported || Notification.permission !== "granted") return;
+  if(NOTIF.mentions && !mentionsMe(m.t)) return;
+  const who = nameOf(m.u, m.n);
+  const body = NOTIF.preview ? (m.img && !m.t.trim() ? "📷 Photo" : snippet(m)) : "Nouveau message";
+  showNotif(who + " · pastel prime", body);
+}
+function setBadge(n){
+  try{ if(navigator.setAppBadge){ n ? navigator.setAppBadge(n) : navigator.clearAppBadge(); } }catch(e){}
 }
 
 /* ================= photos ================= */
@@ -1212,6 +1305,15 @@ $("btnSettings").addEventListener("click", ()=>{
   openSheet(`<h2>${esc(nameOf(S.uid, S.pseudo))}</h2>
     <h3>Couleur de tes bulles</h3>
     <div class="swatches">${PALETTE.map((p,i)=>`<button type="button" class="swatch${i===ci?" on":""}" data-c="${i}" style="background:${p.bg}" aria-label="Couleur ${i+1}"></button>`).join("")}</div>
+    <h3>Notifications</h3>
+    <p id="notifState" class="notifstate">${esc(notifStatus())}</p>
+    ${notifSupported && Notification.permission === "default" ? `<button id="btnNotif" class="btn small" type="button">🔔 Activer les notifications</button>` : ""}
+    ${notifSupported && Notification.permission === "granted" ? `<label class="toggle" for="tgNotif"><input id="tgNotif" type="checkbox" ${NOTIF.on?"checked":""}>Recevoir les notifications</label>
+    <label class="toggle" for="tgPreview"><input id="tgPreview" type="checkbox" ${NOTIF.preview?"checked":""}>Montrer le texte du message</label>
+    <label class="toggle" for="tgMent"><input id="tgMent" type="checkbox" ${NOTIF.mentions?"checked":""}>Seulement quand on écrit @${esc(nameOf(S.uid, S.pseudo))}</label>
+    <button id="btnTest" class="linkbtn" type="button">Envoyer une notification de test</button>` : ""}
+    <label class="toggle" for="tgSound"><input id="tgSound" type="checkbox" ${NOTIF.sound?"checked":""}>Son à l’arrivée d’un message</label>
+    <p class="note">Les notifications arrivent tant que le chat est ouvert, même dans un autre onglet ou en arrière-plan sur ordinateur.</p>
     <h3>Changer de mot de passe</h3>
     <div class="field"><label for="pwOld">Mot de passe actuel</label><input id="pwOld" class="input" type="password" autocomplete="current-password"></div>
     <div class="field"><label for="pwNew">Nouveau mot de passe</label><input id="pwNew" class="input" type="password" autocomplete="new-password"></div>
@@ -1230,6 +1332,12 @@ $("btnSettings").addEventListener("click", ()=>{
     writeMe({color:c}).catch(()=>toast("La couleur n’a pas été enregistrée."));
   });
   $("btnLock").onclick = ()=>{ closeSheet(); lock(); };
+  const bn = $("btnNotif"); if(bn) bn.onclick = async ()=>{ await askNotif(); closeSheet(); $("btnSettings").click(); };
+  const tn = $("tgNotif"); if(tn) tn.onchange = ()=>{ NOTIF.on = tn.checked; $("notifState").textContent = notifStatus(); };
+  const tp = $("tgPreview"); if(tp) tp.onchange = ()=>{ NOTIF.preview = tp.checked; };
+  const tm = $("tgMent"); if(tm) tm.onchange = ()=>{ NOTIF.mentions = tm.checked; };
+  const bt = $("btnTest"); if(bt) bt.onclick = ()=> showNotif("pastel prime 🌟", "Ceci est un test : les notifications marchent.");
+  const ts = $("tgSound"); if(ts) ts.onchange = ()=>{ NOTIF.sound = ts.checked; if(ts.checked) ding(); };
   $("pwSave").onclick = async ()=>{
     const err = $("pwErr"); err.textContent = "";
     const o = $("pwOld").value, n = $("pwNew").value, n2 = $("pwNew2").value;
