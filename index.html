@@ -204,6 +204,13 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
 .toggle{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;font-weight:700}
 .toggle input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .notifstate{font-size:.88rem;color:var(--muted);margin:0}
+.tabs{display:flex;gap:6px;background:var(--bg);padding:5px;border-radius:16px}
+.tabs button{flex:1;border:0;background:none;border-radius:12px;padding:10px 6px;font-weight:800;font-size:.92rem;color:var(--muted);min-height:44px}
+.tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(60,40,100,.12)}
+.guide{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:8px;font-size:.95rem}
+.guide li::marker{font-weight:800;color:var(--accent)}
+.guide b{font-weight:800}
+.tip{background:var(--accent-soft);border-radius:14px;padding:10px 12px;font-size:.88rem;margin:0}
 .readonly{max-width:760px;margin:0 auto;padding:10px;text-align:center;color:var(--muted);font-size:.9rem;font-weight:700}
 
 /* ---------- sheets ---------- */
@@ -294,6 +301,7 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
       <p id="loginErr" class="err" role="alert"></p>
       <button id="btnLogin" class="btn" type="submit">Continuer</button>
       <button id="btnForgot" type="button" class="linkbtn hidden">Mot de passe oublié ?</button>
+      <button id="btnHelpLogin" type="button" class="linkbtn">📱 Installer le chat et recevoir les notifications</button>
     </form>
   </div>
 </section>
@@ -303,6 +311,9 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
     <button id="btnPeople" class="title" type="button" aria-label="Voir les membres">
       <span class="logo"><span class="p">pastel prime</span> 🌟</span>
       <span id="sub" class="sub">…</span>
+    </button>
+    <button id="btnHelp" class="iconbtn" type="button" aria-label="Aide : installer le chat et les notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4"/><circle cx="12" cy="16.8" r=".6" fill="currentColor"/></svg>
     </button>
     <button id="btnSearch" class="iconbtn" type="button" aria-label="Rechercher">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -631,7 +642,7 @@ function enterChat(){
   try{
     if(!localStorage.getItem("pp_notif_hint")){
       const need = notifSupported ? Notification.permission === "default" : (isIOS && !isStandalone);
-      if(need){ localStorage.setItem("pp_notif_hint","1"); setTimeout(()=>toast("🔔 Pour être prévenu des nouveaux messages, touche 👤 en haut à droite."), 1500); }
+      if(need){ localStorage.setItem("pp_notif_hint","1"); setTimeout(()=>toast("🔔 Pour être prévenu des nouveaux messages, touche ? en haut pour le guide."), 1500); }
     }
   }catch(e){}
   clearInterval(heartbeat);
@@ -957,6 +968,58 @@ function onNewMessage(m){
 function setBadge(n){
   try{ if(navigator.setAppBadge){ n ? navigator.setAppBadge(n) : navigator.clearAppBadge(); } }catch(e){}
 }
+
+/* ================= aide / tutoriel ================= */
+const URL_CHAT = "https://hadri2012.github.io/pastel--prime/";
+const GUIDES = {
+  iphone: {label:"iPhone", html:`
+    <ol class="guide">
+      <li>Ouvre <b>${URL_CHAT}</b> dans <b>Safari</b>. Pas Chrome : sur iPhone, seul Safari permet d’installer le chat.</li>
+      <li>Touche le bouton <b>Partager</b> (le carré avec une flèche vers le haut).</li>
+      <li>Choisis <b>Sur l’écran d’accueil</b>, puis touche <b>Ajouter</b>.</li>
+      <li>Ferme Safari et ouvre le chat <b>depuis la nouvelle icône</b> pastel prime.</li>
+      <li>Connecte-toi avec ton pseudo et ton mot de passe.</li>
+      <li>Touche <b>👤</b> en haut à droite, puis <b>Activer les notifications</b>, et choisis <b>Autoriser</b>.</li>
+      <li>Touche <b>Envoyer une notification de test</b> pour vérifier.</li>
+    </ol>
+    <p class="tip">Il faut iOS 16.4 ou plus récent. Si rien n’arrive : Réglages de l’iPhone → Notifications → pastel prime → Autoriser les notifications.</p>`},
+  android: {label:"Android", html:`
+    <ol class="guide">
+      <li>Ouvre <b>${URL_CHAT}</b> dans <b>Chrome</b>.</li>
+      <li>Touche le menu <b>⋮</b> en haut à droite, puis <b>Installer l’application</b> ou <b>Ajouter à l’écran d’accueil</b>, et confirme.</li>
+      <li>Ouvre le chat <b>depuis la nouvelle icône</b>.</li>
+      <li>Connecte-toi avec ton pseudo et ton mot de passe.</li>
+      <li>Touche <b>👤</b> en haut à droite, puis <b>Activer les notifications</b>, et choisis <b>Autoriser</b>. Si Android le demande aussi pour Chrome, choisis encore <b>Autoriser</b>.</li>
+      <li>Touche <b>Envoyer une notification de test</b> pour vérifier.</li>
+    </ol>
+    <p class="tip">Sur Samsung Internet : menu ≡ → Ajouter la page à → Écran d’accueil. Si rien n’arrive : Réglages → Applications → Chrome → Notifications, et vérifie que l’économie de batterie ne bloque pas Chrome.</p>`},
+  pc: {label:"Ordinateur", html:`
+    <ol class="guide">
+      <li>Ouvre <b>${URL_CHAT}</b> dans ton navigateur (Chrome, Edge, Safari ou Firefox).</li>
+      <li>Connecte-toi avec ton pseudo et ton mot de passe.</li>
+      <li>Clique sur <b>👤</b> en haut à droite, puis <b>Activer les notifications</b>, et choisis <b>Autoriser</b>.</li>
+      <li>Clique sur <b>Envoyer une notification de test</b> pour vérifier.</li>
+      <li>Garde l’onglet du chat ouvert : tu seras prévenu même si tu fais autre chose.</li>
+    </ol>
+    <p class="tip">Sur Chrome ou Edge, tu peux aussi installer le chat comme une app : icône d’installation à droite de la barre d’adresse.</p>`}
+};
+function guessDevice(){ return isIOS ? "iphone" : /Android/i.test(navigator.userAgent) ? "android" : "pc"; }
+function openHelp(tab){
+  tab = tab || guessDevice();
+  openSheet(`<h2>Installer le chat et recevoir les notifications</h2>
+    <div class="tabs" role="tablist">${Object.entries(GUIDES).map(([k,g])=>`<button type="button" role="tab" data-tab="${k}" class="${k===tab?"on":""}" aria-selected="${k===tab}">${g.label}</button>`).join("")}</div>
+    <div id="guideBody">${GUIDES[tab].html}</div>
+    <p class="tip">Les notifications arrivent seulement quand le chat est ouvert, même en arrière-plan. Si le téléphone met le chat en pause, les nouveaux messages s’afficheront à la prochaine ouverture.</p>
+    <button class="btn ghost" type="button" data-x>Fermer</button>`);
+  const sh = $("sheet");
+  sh.querySelectorAll("[data-tab]").forEach(b => b.onclick = ()=>{
+    sh.querySelectorAll("[data-tab]").forEach(x => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-selected", on); });
+    $("guideBody").innerHTML = GUIDES[b.dataset.tab].html;
+  });
+  sh.querySelector("[data-x]").onclick = closeSheet;
+}
+$("btnHelp").addEventListener("click", ()=>openHelp());
+$("btnHelpLogin").addEventListener("click", ()=>openHelp());
 
 /* ================= photos ================= */
 const imgCache = new Map();   // id -> blob: URL | "loading" | "error"
@@ -1313,7 +1376,7 @@ $("btnSettings").addEventListener("click", ()=>{
     <label class="toggle" for="tgMent"><input id="tgMent" type="checkbox" ${NOTIF.mentions?"checked":""}>Seulement quand on écrit @${esc(nameOf(S.uid, S.pseudo))}</label>
     <button id="btnTest" class="linkbtn" type="button">Envoyer une notification de test</button>` : ""}
     <label class="toggle" for="tgSound"><input id="tgSound" type="checkbox" ${NOTIF.sound?"checked":""}>Son à l’arrivée d’un message</label>
-    <p class="note">Les notifications arrivent tant que le chat est ouvert, même dans un autre onglet ou en arrière-plan sur ordinateur.</p>
+    <button id="btnGuide" class="linkbtn" type="button">📱 Voir le guide pas à pas (iPhone, Android, ordinateur)</button>
     <h3>Changer de mot de passe</h3>
     <div class="field"><label for="pwOld">Mot de passe actuel</label><input id="pwOld" class="input" type="password" autocomplete="current-password"></div>
     <div class="field"><label for="pwNew">Nouveau mot de passe</label><input id="pwNew" class="input" type="password" autocomplete="new-password"></div>
@@ -1335,6 +1398,7 @@ $("btnSettings").addEventListener("click", ()=>{
   const bn = $("btnNotif"); if(bn) bn.onclick = async ()=>{ await askNotif(); closeSheet(); $("btnSettings").click(); };
   const tn = $("tgNotif"); if(tn) tn.onchange = ()=>{ NOTIF.on = tn.checked; $("notifState").textContent = notifStatus(); };
   const tp = $("tgPreview"); if(tp) tp.onchange = ()=>{ NOTIF.preview = tp.checked; };
+  $("btnGuide").onclick = ()=>{ closeSheet(); openHelp(); };
   const tm = $("tgMent"); if(tm) tm.onchange = ()=>{ NOTIF.mentions = tm.checked; };
   const bt = $("btnTest"); if(bt) bt.onclick = ()=> showNotif("pastel prime 🌟", "Ceci est un test : les notifications marchent.");
   const ts = $("tgSound"); if(ts) ts.onchange = ()=>{ NOTIF.sound = ts.checked; if(ts.checked) ding(); };
