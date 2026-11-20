@@ -249,7 +249,13 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
 .tile.nocam .tav{display:grid}
 .tile .tname{position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.45);padding:4px 10px;border-radius:999px;font-size:.85rem;font-weight:800}
 .tile .tstate{position:absolute;left:0;right:0;top:12px;text-align:center;font-size:.85rem;font-weight:800}
+.soundbtn{margin:0 16px 8px;border:0;border-radius:16px;padding:14px;font-weight:800;font-size:1rem;background:#ffe68a;color:#2d2540}
 .callctl{display:flex;justify-content:center;gap:16px;padding:14px 12px 10px}
+.tile.micdead .tname::after{content:" · micro arrêté";color:#ffb3c4}
+.tile.speaking{outline:3px solid #6fe0b0;outline-offset:-3px}
+.diagbtn{border:0;border-radius:12px;padding:8px 12px;background:rgba(255,255,255,.16);color:#fff;font-weight:800;font-size:.82rem;min-height:36px}
+.diag{margin:0 12px 8px;padding:12px 14px;border-radius:16px;background:#2c2440;font-size:.86rem;line-height:1.5;max-height:42%;overflow:auto;white-space:pre-wrap}
+.diag b{font-weight:800}
 .callnote{margin:0 16px 10px;text-align:center;font-size:.75rem;opacity:.65}
 .readonly{max-width:760px;margin:0 auto;padding:10px;text-align:center;color:var(--muted);font-size:.9rem;font-weight:700}
 
@@ -342,6 +348,7 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
       <button id="btnLogin" class="btn" type="submit">Continuer</button>
       <button id="btnForgot" type="button" class="linkbtn hidden">Mot de passe oublié ?</button>
       <button id="btnHelpLogin" type="button" class="linkbtn">📱 Installer le chat et recevoir les notifications</button>
+      <p id="verLogin" class="note" style="font-size:.72rem;opacity:.7"></p>
     </form>
   </div>
 </section>
@@ -416,7 +423,9 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
   </div>
 </div>
 <section id="callUI" class="callui hidden" aria-label="Appel en cours">
-  <div class="calltop"><span id="callTitle"></span><span id="callTime"></span></div>
+  <div class="calltop"><span id="callTitle"></span><span style="display:flex;align-items:center;gap:10px"><span id="callTime"></span><button id="cDiag" class="diagbtn" type="button" aria-expanded="false">🔎 Test du son</button></span></div>
+  <div id="diag" class="diag hidden" aria-live="polite"></div>
+  <button id="cSound" class="soundbtn hidden" type="button">🔊 Touche ici pour entendre les autres</button>
   <div id="callGrid" class="callgrid"></div>
   <div class="callctl">
     <button id="cMic" class="cbtn" type="button" aria-label="Couper le micro">🎙️</button>
@@ -459,6 +468,7 @@ const firebaseConfig = {
 };
 const DOMAIN = "pastelprime.local";   // les comptes sont créés en « pseudo@pastelprime.local »
 const ADMIN = "hadrien";              // ce pseudo peut supprimer les messages de tout le monde
+const VERSION = "v13 · 20 nov. 21h30";
 const PAGE = 80;                      // messages chargés à la fois
 const MAXLEN = 2000;
 
@@ -468,6 +478,7 @@ const db = getFirestore(app);
 
 /* ================= utilitaires ================= */
 const $ = id => document.getElementById(id);
+{ const v = document.getElementById("verLogin"); if(v) v.textContent = "pastel prime " + VERSION; }
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fold = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
 const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
@@ -1092,7 +1103,8 @@ $("btnHelpLogin").addEventListener("click", ()=>openHelp());
    Firebase sert seulement à se « présenter » : qui est dans l'appel, et l'échange des descriptions de connexion. */
 const ICE_SERVERS = [{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}];
 const C = { calls:{}, cur:null, local:null, pcs:new Map(), tiles:new Map(), unsubSig:null, hb:null, timer:null,
-  ringing:null, dismissed:new Set(), cleaned:new Set(), facing:"user", startedAt:0, joinedAt:0, noAnswerT:null, everJoined:false, ringIv:null };
+  ringing:null, dismissed:new Set(), cleaned:new Set(), facing:"user", startedAt:0, joinedAt:0, noAnswerT:null, everJoined:false, ringIv:null,
+  preview:null, watch:null, micFix:0 };
 const rtcOK = !!(window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
 function freshP(e){ return !!(e && typeof e.s === "number" && Date.now() - e.s < 45000); }
@@ -1202,17 +1214,35 @@ async function getMedia(type){
   const video = {facingMode:C.facing, width:{ideal:640}, height:{ideal:480}};
   try{
     C.local = await navigator.mediaDevices.getUserMedia({audio, video: type === "video" ? video : false});
+    C.micFix = 0; watchMic();
     return true;
   }catch(e){
     if(type === "video"){
-      try{ C.local = await navigator.mediaDevices.getUserMedia({audio}); toast("Caméra indisponible : tu participes en audio."); return true; }catch(e2){ e = e2; }
+      try{ C.local = await navigator.mediaDevices.getUserMedia({audio}); C.micFix = 0; watchMic(); toast("Caméra indisponible : tu participes en audio."); return true; }catch(e2){ e = e2; }
     }
     toast(e && e.name === "NotAllowedError" ? "Autorise le micro" + (type === "video" ? " et la caméra" : "") + " pour ce site, puis réessaie." :
           e && e.name === "NotFoundError" ? "Aucun micro trouvé sur cet appareil." : "Impossible d’accéder au micro ou à la caméra.");
     return false;
   }
 }
-const myAudio = () => C.local ? C.local.getAudioTracks()[0] || null : null;
+const myAudio = () => C.local ? C.local.getAudioTracks().find(t => t.readyState === "live") || null : null;
+/* Si l'appareil arrête le micro en cours d'appel (ça arrive sur iPhone), on le redemande une fois et on le rebranche. */
+function watchMic(){
+  const a = myAudio(); if(!a) return;
+  a.onended = () => { if(C.cur) reacquireMic(); };
+}
+async function reacquireMic(){
+  if(!C.cur || !C.local || C.micFix >= 3) return;
+  C.micFix++;
+  try{
+    const st = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true}});
+    const na = st.getAudioTracks()[0]; if(!na || !C.cur) { if(na) na.stop(); return; }
+    C.local.getAudioTracks().forEach(t => { try{ t.stop(); }catch(e){} C.local.removeTrack(t); });
+    C.local.addTrack(na);
+    for(const P of C.pcs.values()){ const sd = senderOf(P.pc, "audio"); if(sd) sd.replaceTrack(na).catch(()=>{}); }
+    watchMic(); pushMe(); renderCallUI();
+  }catch(e){ toast("Ton micro s’est arrêté. Raccroche et rappelle pour le relancer."); }
+}
 const myVideo = () => C.local ? C.local.getVideoTracks().find(t => t.readyState === "live") || null : null;
 function meEntry(){ const a = myAudio(); return {s:Date.now(), cam:!!myVideo(), mic:!!(a && a.enabled)}; }
 function pushMe(){ if(C.cur) updateDoc(callRef(C.cur.id), {["p." + S.uid]: meEntry()}).catch(()=>{}); }
@@ -1264,6 +1294,7 @@ function openCall(){
   }, () => {});
   clearInterval(C.hb); C.hb = setInterval(pushMe, 15000);
   clearInterval(C.timer); C.timer = setInterval(renderCallTop, 1000);
+  clearInterval(C.watch); C.watch = setInterval(() => { audioWatch().catch(()=>{}); }, 1000);
   stopTyping();
   showCallUI();
   const call = C.calls[C.cur.id]; if(call) syncPeers(call); else renderCallUI();
@@ -1280,13 +1311,14 @@ async function leaveCall(msg){
 function stopLocal(){ if(C.local){ C.local.getTracks().forEach(t => t.stop()); C.local = null; } }
 function endLocal(msg){
   if(!C.cur && !C.local) return;
-  clearInterval(C.hb); clearInterval(C.timer); clearTimeout(C.noAnswerT); C.noAnswerT = null;
+  clearInterval(C.hb); clearInterval(C.timer); clearInterval(C.watch); clearTimeout(C.noAnswerT); C.noAnswerT = null;
+  C.preview = null; $("diag").classList.add("hidden"); $("cDiag").setAttribute("aria-expanded", "false");
   if(C.unsubSig){ try{ C.unsubSig(); }catch(e){} C.unsubSig = null; }
   for(const u of [...C.pcs.keys()]) closePeer(u);
   stopLocal();
   if(C.cur) C.dismissed.add(C.cur.id);
   C.cur = null;
-  $("callUI").classList.add("hidden");
+  $("callUI").classList.add("hidden"); $("cSound").classList.add("hidden");
   $("callGrid").innerHTML = ""; C.tiles.clear();
   if(msg) toast(msg);
   renderCallBar();
@@ -1304,13 +1336,21 @@ function syncPeers(call){
 }
 function newPC(u, pcid){
   const pc = new RTCPeerConnection({iceServers:ICE_SERVERS});
-  const P = {pc, pcid, u, stream:new MediaStream(), state:"new"};
+  const P = {pc, pcid, u, state:"new", diag:{}, fixes:0, stuck:0};
   pc.ontrack = e => {
-    if(!P.stream.getTracks().includes(e.track)) P.stream.addTrack(e.track);
-    attachTile(u, P);
+    if(e.track.kind === "audio"){
+      P.aTrack = e.track;
+      // Safari peut rester muet si le lecteur a été branché avant l'arrivée réelle du son : on rebranche à ce moment-là.
+      e.track.onunmute = () => { if(C.pcs.get(u) === P) attachAudio(u, P, true); };
+      attachAudio(u, P, true);
+    }else{
+      P.video = new MediaStream([e.track]);
+      attachTile(u, P);
+    }
   };
   pc.onconnectionstatechange = () => {
     P.state = pc.connectionState; renderCallUI();
+    if(pc.connectionState === "connected" && P.aTrack) attachAudio(u, P, false);
     if(pc.connectionState === "failed") onPeerFailed(u, P);
   };
   C.pcs.set(u, P);
@@ -1331,8 +1371,8 @@ async function makeOffer(u, tries){
   const pcid = Math.random().toString(36).slice(2, 10);
   const P = newPC(u, pcid); P.role = "offer"; P.tries = tries;
   const pc = P.pc;
-  pc.addTransceiver(myAudio() || "audio", {direction:"sendrecv"});
-  pc.addTransceiver(myVideo() || "video", {direction:"sendrecv"});
+  pc.addTransceiver(myAudio() || "audio", {direction:"sendrecv", streams:[C.local]});
+  pc.addTransceiver(myVideo() || "video", {direction:"sendrecv", streams:[C.local]});
   try{
     await pc.setLocalDescription(await pc.createOffer());
     await waitIce(pc);
@@ -1351,8 +1391,11 @@ async function handleSig(d){
     await pc.setRemoteDescription({type:"offer", sdp:d.sdp});
     for(const t of pc.getTransceivers()){
       const kind = t.receiver && t.receiver.track ? t.receiver.track.kind : "";
-      t.direction = "sendrecv";
-      await t.sender.replaceTrack(kind === "audio" ? myAudio() : kind === "video" ? myVideo() : null).catch(()=>{});
+      const mine = kind === "audio" ? myAudio() : kind === "video" ? myVideo() : null;
+      let added = false;
+      if(mine){ try{ pc.addTrack(mine, C.local); added = true; }catch(e){} }   // réutilise ce canal et le met en « envoi + réception »
+      if(t.direction !== "sendrecv") t.direction = "sendrecv";
+      if(mine && (!added || t.sender.track !== mine)) await t.sender.replaceTrack(mine).catch(()=>{});
     }
     await pc.setLocalDescription(await pc.createAnswer());
     await waitIce(pc);
@@ -1390,7 +1433,7 @@ function tileFor(u){
   if(!t){
     t = document.createElement("div");
     t.className = "tile" + (u === S.uid ? " me" : ""); t.dataset.u = u;
-    t.innerHTML = `<video autoplay playsinline${u === S.uid ? " muted" : ""}></video><div class="tav"></div><div class="tname"></div><div class="tstate"></div>`;
+    t.innerHTML = `<video autoplay playsinline muted></video>${u === S.uid ? "" : "<audio autoplay></audio>"}<div class="tav"></div><div class="tname"></div><div class="tstate"></div>`;
     $("callGrid").appendChild(t);
     C.tiles.set(u, t);
   }
@@ -1398,9 +1441,90 @@ function tileFor(u){
 }
 function attachTile(u, P){
   const t = tileFor(u), v = t.querySelector("video");
-  if(v.srcObject !== P.stream){ v.srcObject = P.stream; }
-  v.play().catch(()=>{});
+  if(P.video && v.srcObject !== P.video){ v.srcObject = P.video; v.play().catch(()=>{}); }
   renderCallUI();
+}
+/* Le son de chaque personne a son propre lecteur <audio>. « fresh » = on rebranche un flux tout neuf (remède connu quand Safari reste muet). */
+function attachAudio(u, P, fresh){
+  if(!P.aTrack) return;
+  const a = tileFor(u).querySelector("audio"); if(!a) return;
+  if(fresh || !a.srcObject || a.srcObject.getAudioTracks()[0] !== P.aTrack){
+    try{ a.pause(); }catch(e){}
+    a.srcObject = new MediaStream([P.aTrack]);
+  }
+  a.muted = false; a.volume = 1;
+  const pr = a.play();
+  if(pr && pr.then) pr.then(() => { P.blocked = false; refreshSoundBtn(); }).catch(() => { P.blocked = true; refreshSoundBtn(); });
+}
+function refreshSoundBtn(){
+  let need = false;
+  for(const P of C.pcs.values()) if(P.blocked) need = true;
+  $("cSound").classList.toggle("hidden", !need);
+}
+/* Appelé pendant un vrai toucher : c'est le seul moment où le navigateur accepte toujours de lancer le son. */
+function unlockSound(){
+  for(const [u, P] of C.pcs) if(P.aTrack) attachAudio(u, P, true);
+  try{ if(audioCtx && audioCtx.state === "suspended") audioCtx.resume(); }catch(e){}
+}
+/* Toutes les secondes : mesure ce qui part et ce qui arrive vraiment, et répare un lecteur resté bloqué. */
+async function audioWatch(){
+  if(!C.cur) return;
+  for(const [u, P] of C.pcs){
+    let st; try{ st = await P.pc.getStats(); }catch(e){ continue; }
+    const d = {sent:null, recv:null, level:null, energy:null};
+    st.forEach(r => {
+      const kind = r.kind || r.mediaType;
+      if(r.type === "outbound-rtp" && kind === "audio") d.sent = r.bytesSent;
+      if(r.type === "inbound-rtp" && kind === "audio"){
+        d.recv = r.bytesReceived;
+        if(typeof r.audioLevel === "number") d.level = r.audioLevel;
+        if(typeof r.totalAudioEnergy === "number") d.energy = r.totalAudioEnergy;
+      }
+      if(r.type === "track" && r.remoteSource && kind !== "video" && typeof r.audioLevel === "number" && d.level === null) d.level = r.audioLevel;
+    });
+    const prev = P.diag || {};
+    d.sending = d.sent !== null && prev.sent !== undefined && prev.sent !== null ? d.sent > prev.sent : null;
+    d.receiving = d.recv !== null && prev.recv !== undefined && prev.recv !== null ? d.recv > prev.recv : null;
+    d.loud = d.level !== null ? d.level > 0.02 : (d.energy !== null && prev.energy !== null && prev.energy !== undefined ? d.energy - prev.energy > 0.0005 : null);
+    const tr = P.pc.getTransceivers().find(x => x.receiver && x.receiver.track && x.receiver.track.kind === "audio");
+    d.dir = tr ? (tr.currentDirection || tr.direction) : "?";
+    const tile = C.tiles.get(u), a = tile ? tile.querySelector("audio") : null;
+    d.playing = !!(a && a.srcObject && !a.paused && a.currentTime !== prev.t);
+    d.t = a ? a.currentTime : 0; d.paused = a ? a.paused : true;
+    P.diag = d;
+    if(tile) tile.classList.toggle("speaking", d.loud === true);
+    // Du son arrive mais le lecteur ne tourne pas : on rebranche (2 essais), puis on demande un toucher.
+    if(d.receiving && P.aTrack && !d.playing){
+      P.stuck = (P.stuck || 0) + 1;
+      if(P.stuck >= 2){
+        if(P.fixes < 2){ P.fixes++; P.stuck = 0; attachAudio(u, P, true); }
+        else { P.blocked = true; refreshSoundBtn(); }
+      }
+    }else{ P.stuck = 0; if(d.playing && P.blocked){ P.blocked = false; refreshSoundBtn(); } }
+  }
+  const me = C.tiles.get(S.uid);
+  if(me){ const a = myAudio(); me.classList.toggle("micdead", !a || a.muted); }
+  if(!$("diag").classList.contains("hidden")) renderDiag();
+}
+function renderDiag(){
+  const yes = "✅", no = "❌", unk = "❔";
+  const a = myAudio();
+  const L = [];
+  L.push(`<b>Version</b> : ${esc(VERSION)}`);
+  L.push(`<b>Ton micro</b> : ` + (!a ? `${no} arrêté par l’appareil` : a.muted ? `${no} bloqué par l’appareil (une autre app l’utilise peut-être)` : !a.enabled ? `⚠️ coupé par toi (bouton 🎙️)` : `${yes} actif`));
+  if(!C.pcs.size) L.push("Personne d’autre n’est encore connecté à l’appel.");
+  for(const [u, P] of C.pcs){
+    const d = P.diag || {}, n = esc(nameOf(u));
+    L.push("");
+    L.push(`<b>${n}</b> — connexion : ${P.state === "connected" ? yes : esc(P.state)} · canal son : ${esc(d.dir || "?")}`);
+    L.push(`• Ton son part vers ${n} : ${d.sending === true ? yes + " oui" : d.sending === false ? no + " non" : unk}`);
+    L.push(`• Le son de ${n} arrive ici : ${d.receiving === true ? yes + " oui" : d.receiving === false ? no + " non, rien n’arrive" : unk}`);
+    L.push(`• ${n} fait du bruit en ce moment : ${d.loud === true ? "🔊 oui" : d.loud === false ? "🔈 non (silence)" : unk + " ce navigateur ne le dit pas"}`);
+    L.push(`• Haut-parleur de cet appareil : ${d.playing ? yes + " en lecture" : P.blocked ? no + " bloqué : touche le bouton jaune" : no + " à l’arrêt"}`);
+  }
+  L.push("");
+  L.push("Si tout est ✅ et 🔊 mais que tu n’entends rien : monte le volume pendant l’appel et vérifie la sortie audio (écouteurs Bluetooth, AirPlay).");
+  $("diag").innerHTML = L.join("\n");
 }
 function renderCallUI(){
   if(!C.cur) return;
@@ -1408,7 +1532,9 @@ function renderCallUI(){
   const parts = partsOf(call).filter(u => u !== S.uid);
   // ma vignette
   const me = tileFor(S.uid), mv = me.querySelector("video");
-  if(C.local && mv.srcObject !== C.local){ mv.srcObject = C.local; mv.play().catch(()=>{}); }
+  const pv = myVideo();
+  if(!C.preview || C.preview.getVideoTracks()[0] !== pv){ C.preview = new MediaStream(pv ? [pv] : []); }
+  if(mv.srcObject !== C.preview){ mv.srcObject = C.preview; mv.play().catch(()=>{}); }
   me.classList.toggle("mirror", C.facing === "user");
   fillTile(me, S.uid, {cam:!!myVideo(), mic:!!(myAudio() && myAudio().enabled)}, "", true);
   for(const u of parts){
@@ -1454,7 +1580,13 @@ function renderCallTop(){
 function showCallUI(){ $("callUI").classList.remove("hidden"); renderCallUI(); }
 
 $("cHang").addEventListener("click", () => leaveCall());
-$("cMic").addEventListener("click", () => { const a = myAudio(); if(!a) return; a.enabled = !a.enabled; pushMe(); renderCallUI(); });
+$("cSound").addEventListener("click", unlockSound);
+$("cDiag").addEventListener("click", () => {
+  const hid = $("diag").classList.toggle("hidden");
+  $("cDiag").setAttribute("aria-expanded", String(!hid));
+  if(!hid){ unlockSound(); renderDiag(); }
+});
+$("cMic").addEventListener("click", () => { const a = myAudio(); if(!a){ reacquireMic(); return; } a.enabled = !a.enabled; pushMe(); renderCallUI(); });
 $("cCam").addEventListener("click", async () => {
   if(!C.cur || !C.local) return;
   const v = myVideo();
@@ -1468,7 +1600,6 @@ $("cCam").addEventListener("click", async () => {
       for(const P of C.pcs.values()){ const s = senderOf(P.pc, "video"); if(s) s.replaceTrack(nv).catch(()=>{}); }
     }catch(e){ toast("Impossible d’allumer la caméra. Vérifie l’autorisation pour ce site."); }
   }
-  const mv = tileFor(S.uid).querySelector("video"); mv.srcObject = null; mv.srcObject = C.local; mv.play().catch(()=>{});
   pushMe(); renderCallUI();
 });
 $("cFlip").addEventListener("click", async () => {
@@ -1479,7 +1610,6 @@ $("cFlip").addEventListener("click", async () => {
     const nv = st.getVideoTracks()[0];
     old.stop(); C.local.removeTrack(old); C.local.addTrack(nv);
     for(const P of C.pcs.values()){ const s = senderOf(P.pc, "video"); if(s) s.replaceTrack(nv).catch(()=>{}); }
-    const mv = tileFor(S.uid).querySelector("video"); mv.srcObject = null; mv.srcObject = C.local; mv.play().catch(()=>{});
   }catch(e){ C.facing = C.facing === "user" ? "environment" : "user"; toast("Impossible de changer de caméra."); }
   renderCallUI();
 });
