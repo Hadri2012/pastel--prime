@@ -426,6 +426,7 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
   <div class="calltop"><span id="callTitle"></span><span style="display:flex;align-items:center;gap:10px"><span id="callTime"></span><button id="cDiag" class="diagbtn" type="button" aria-expanded="false">🔎 Test du son</button></span></div>
   <div id="diag" class="diag hidden" aria-live="polite"></div>
   <button id="cSound" class="soundbtn hidden" type="button">🔊 Touche ici pour entendre les autres</button>
+  <button id="cMicFix" class="soundbtn hidden" type="button">🎙️ Touche ici pour réactiver ton micro</button>
   <div id="callGrid" class="callgrid"></div>
   <div class="callctl">
     <button id="cMic" class="cbtn" type="button" aria-label="Couper le micro">🎙️</button>
@@ -433,6 +434,7 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
     <button id="cFlip" class="cbtn hidden" type="button" aria-label="Changer de caméra">🔄</button>
     <button id="cHang" class="cbtn red" type="button" aria-label="Raccrocher">✕</button>
   </div>
+  <p id="callIosNote" class="callnote hidden">Sur iPhone, reste dans le chat pendant l’appel : si tu changes d’app ou verrouilles l’écran, l’iPhone coupe ton micro. Il revient tout seul à ton retour.</p>
   <p class="callnote">Le son et l’image vont directement d’un appareil à l’autre. pastel prime n’enregistre rien.</p>
 </section>
 <div id="toast" class="toast hidden" role="status"></div>
@@ -468,7 +470,7 @@ const firebaseConfig = {
 };
 const DOMAIN = "pastelprime.local";   // les comptes sont créés en « pseudo@pastelprime.local »
 const ADMIN = "hadrien";              // ce pseudo peut supprimer les messages de tout le monde
-const VERSION = "v13 · 20 nov. 21h30";
+const VERSION = "v14 · 21 nov.";
 const PAGE = 80;                      // messages chargés à la fois
 const MAXLEN = 2000;
 
@@ -1059,7 +1061,8 @@ const GUIDES = {
       <li>Touche <b>👤</b> en haut à droite, puis <b>Activer les notifications</b>, et choisis <b>Autoriser</b>.</li>
       <li>Touche <b>Envoyer une notification de test</b> pour vérifier.</li>
     </ol>
-    <p class="tip">Il faut iOS 16.4 ou plus récent. Si rien n’arrive : Réglages de l’iPhone → Notifications → pastel prime → Autoriser les notifications.</p>`},
+    <p class="tip">Il faut iOS 16.4 ou plus récent. Si rien n’arrive : Réglages de l’iPhone → Notifications → pastel prime → Autoriser les notifications.</p>
+    <p class="tip">Pendant un appel, reste dans le chat. Si tu changes d’app ou verrouilles l’écran, l’iPhone coupe ton micro : c’est une règle d’Apple. À ton retour, le micro revient tout seul, ou un bouton jaune te demande de toucher l’écran.</p>`},
   android: {label:"Android", html:`
     <ol class="guide">
       <li>Ouvre <b>${URL_CHAT}</b> dans <b>Chrome</b>.</li>
@@ -1104,7 +1107,13 @@ $("btnHelpLogin").addEventListener("click", ()=>openHelp());
 const ICE_SERVERS = [{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}];
 const C = { calls:{}, cur:null, local:null, pcs:new Map(), tiles:new Map(), unsubSig:null, hb:null, timer:null,
   ringing:null, dismissed:new Set(), cleaned:new Set(), facing:"user", startedAt:0, joinedAt:0, noAnswerT:null, everJoined:false, ringIv:null,
-  preview:null, watch:null, micFix:0 };
+  preview:null, watch:null, micFix:0,
+  userMuted:false, camWanted:false, hiddenAt:0, resumeUntil:0, recovering:false, pendingRecover:false,
+  micTries:0, micBadSecs:0, restarts:{}, lastRecover:"" };
+const AUDIO_C = {echoCancellation:true, noiseSuppression:true, autoGainControl:true};
+const videoC = () => ({facingMode:C.facing, width:{ideal:640}, height:{ideal:480}});
+/* Indique au système qu'on fait un appel (son + micro). Safari 16.4+ ; ignoré ailleurs. */
+function setAudioSession(on){ try{ if(navigator.audioSession) navigator.audioSession.type = on ? "play-and-record" : "auto"; }catch(e){} }
 const rtcOK = !!(window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
 function freshP(e){ return !!(e && typeof e.s === "number" && Date.now() - e.s < 45000); }
@@ -1134,6 +1143,8 @@ function onCallsChange(){
   }
   // nettoyage des appels abandonnés (appareil fermé sans raccrocher)
   for(const call of Object.values(C.calls)){
+    if(C.cur && call.id === C.cur.id) continue;              // l'appel où je suis n'est pas abandonné
+    if(Date.now() < C.resumeUntil) continue;                  // infos peut-être périmées juste après un retour
     if(call.active && !callAlive(call) && !C.cleaned.has(call.id)){
       C.cleaned.add(call.id);
       updateDoc(callRef(call.id), {active:false, ended:Date.now()}).catch(()=>{});
@@ -1210,41 +1221,143 @@ $("ringNo").addEventListener("click", () => {
 
 /* ---------- micro / caméra ---------- */
 async function getMedia(type){
-  const audio = {echoCancellation:true, noiseSuppression:true, autoGainControl:true};
-  const video = {facingMode:C.facing, width:{ideal:640}, height:{ideal:480}};
+  const audio = AUDIO_C;
+  const video = videoC();
+  setAudioSession(true);
+  C.userMuted = false; C.micTries = 0; C.micBadSecs = 0; C.restarts = {}; C.lastRecover = "";
   try{
     C.local = await navigator.mediaDevices.getUserMedia({audio, video: type === "video" ? video : false});
-    C.micFix = 0; watchMic();
+    C.micFix = 0; C.camWanted = !!myVideo(); watchMic(); watchCam();
     return true;
   }catch(e){
     if(type === "video"){
-      try{ C.local = await navigator.mediaDevices.getUserMedia({audio}); C.micFix = 0; watchMic(); toast("Caméra indisponible : tu participes en audio."); return true; }catch(e2){ e = e2; }
+      try{ C.local = await navigator.mediaDevices.getUserMedia({audio}); C.micFix = 0; C.camWanted = false; watchMic(); toast("Caméra indisponible : tu participes en audio."); return true; }catch(e2){ e = e2; }
     }
+    setAudioSession(false);
     toast(e && e.name === "NotAllowedError" ? "Autorise le micro" + (type === "video" ? " et la caméra" : "") + " pour ce site, puis réessaie." :
           e && e.name === "NotFoundError" ? "Aucun micro trouvé sur cet appareil." : "Impossible d’accéder au micro ou à la caméra.");
     return false;
   }
 }
 const myAudio = () => C.local ? C.local.getAudioTracks().find(t => t.readyState === "live") || null : null;
-/* Si l'appareil arrête le micro en cours d'appel (ça arrive sur iPhone), on le redemande une fois et on le rebranche. */
+/* ----- Micro et caméra coupés par le système (iPhone en arrière-plan, appel téléphonique, Siri…) -----
+   « muted » = le système a mis la piste en pause (elle peut revenir seule) ; « ended » = la piste est morte, il en faut une nouvelle.
+   Le choix de l'utilisateur (bouton 🎙️) est gardé à part dans C.userMuted : on ne le change jamais à sa place. */
+function micProblem(){
+  const a = C.local && C.local.getAudioTracks()[0];
+  if(!a || a.readyState !== "live") return "ended";
+  if(a.muted) return "muted";
+  return "";
+}
+function camProblem(){
+  if(!C.camWanted) return "";
+  const v = C.local && C.local.getVideoTracks()[0];
+  if(!v || v.readyState !== "live") return "ended";
+  if(v.muted) return "muted";
+  return "";
+}
 function watchMic(){
-  const a = myAudio(); if(!a) return;
-  a.onended = () => { if(C.cur) reacquireMic(); };
+  const a = C.local && C.local.getAudioTracks()[0]; if(!a) return;
+  a.onended = () => { if(C.cur && C.local && C.local.getAudioTracks().includes(a)) scheduleRecover(); else renderCallUI(); };
+  a.onmute = () => { if(C.cur) renderCallUI(); };
+  a.onunmute = () => { if(C.cur){ C.micBadSecs = 0; renderCallUI(); } };
 }
-async function reacquireMic(){
-  if(!C.cur || !C.local || C.micFix >= 3) return;
-  C.micFix++;
+function watchCam(){
+  const v = C.local && C.local.getVideoTracks()[0]; if(!v) return;
+  v.onended = () => { if(C.cur && C.camWanted && C.local && C.local.getVideoTracks().includes(v)) scheduleRecover(); };
+}
+function scheduleRecover(){
+  if(document.visibilityState !== "visible"){ C.pendingRecover = true; return; }   // impossible en arrière-plan : on attend le retour
+  setTimeout(() => recoverMedia(false), 300);
+}
+/* Remplace les pistes mortes ou bloquées par des neuves, sans changer l'état « micro coupé par moi ». */
+async function swapMedia(needA, needV, fromGesture){
+  const cons = {};
+  if(needA) cons.audio = AUDIO_C;
+  if(needV) cons.video = videoC();
+  if(!needA && !needV) return true;
+  let st;
+  try{ st = await navigator.mediaDevices.getUserMedia(cons); }
+  catch(e){
+    if(needA){ showMicFix(true); }
+    else { C.camWanted = false; toast("La caméra ne s’est pas rallumée : touche 📷 pour la relancer."); }
+    return false;
+  }
+  if(!C.cur || !C.local){ st.getTracks().forEach(t => t.stop()); return false; }
+  for(const nt of st.getTracks()){
+    const kind = nt.kind;
+    C.local.getTracks().filter(t => t.kind === kind).forEach(t => { t.onended = null; t.onmute = null; t.onunmute = null; try{ t.stop(); }catch(e){} C.local.removeTrack(t); });
+    if(kind === "audio") nt.enabled = !C.userMuted;
+    C.local.addTrack(nt);
+    for(const P of C.pcs.values()){ const sd = senderOf(P.pc, kind); if(sd) sd.replaceTrack(nt).catch(()=>{}); }
+  }
+  watchMic(); watchCam();
+  if(needA){ showMicFix(false); C.micBadSecs = 0; }
+  return true;
+}
+function showMicFix(on){ $("cMicFix").classList.toggle("hidden", !on); }
+async function recoverMedia(fromGesture){
+  if(!C.cur || !C.local || C.recovering) return;
+  if(document.visibilityState !== "visible"){ C.pendingRecover = true; return; }
+  C.pendingRecover = false;
+  const mp = micProblem(), cp = camProblem();
+  // Micro coupé volontairement : on ne le rallume pas. Il sera recréé quand la personne retouchera 🎙️.
+  const needA = !!mp && !C.userMuted && (fromGesture || C.micTries < 3);
+  const needV = !!cp;
+  if(mp && !C.userMuted && !needA){ showMicFix(true); }
+  if(!needA && !needV){ renderCallUI(); return; }
+  C.recovering = true;
+  let ok = false;
   try{
-    const st = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true}});
-    const na = st.getAudioTracks()[0]; if(!na || !C.cur) { if(na) na.stop(); return; }
-    C.local.getAudioTracks().forEach(t => { try{ t.stop(); }catch(e){} C.local.removeTrack(t); });
-    C.local.addTrack(na);
-    for(const P of C.pcs.values()){ const sd = senderOf(P.pc, "audio"); if(sd) sd.replaceTrack(na).catch(()=>{}); }
-    watchMic(); pushMe(); renderCallUI();
-  }catch(e){ toast("Ton micro s’est arrêté. Raccroche et rappelle pour le relancer."); }
+    if(needA) C.micTries++;
+    ok = await swapMedia(needA, needV, fromGesture);
+  }finally{ C.recovering = false; }
+  if(ok && needA){ C.lastRecover = "auto"; toast("🎙️ Ton micro est rétabli."); }
+  for(const [u, P] of C.pcs) if(P.aTrack) attachAudio(u, P, true);
+  pushMe(); renderCallUI();
 }
+/* Compatibilité v13 : le bouton 🎙️ sans piste et l'ancien appel passent par la récupération. */
+function reacquireMic(){ return recoverMedia(true); }
+
+/* ----- Connexions : les refaire si elles sont mortes pendant l'absence ----- */
+function restartPeer(u){
+  if(!C.cur) return;
+  const n = (C.restarts[u] || 0); if(n >= 4) return;
+  C.restarts[u] = n + 1;
+  closePeer(u, true);
+  if(S.uid < u) makeOffer(u, 0);
+  else sendSig(u, "restart", "x" + Date.now(), "").catch(()=>{});
+}
+function checkPeers(force){
+  if(!C.cur) return;
+  const call = C.calls[C.cur.id];
+  const parts = partsOf(call).filter(u => u !== S.uid);
+  for(const u of parts){
+    const P = C.pcs.get(u);
+    const st = P ? P.pc.connectionState : "none";
+    if(!force && (st === "connected" || ((st === "new" || st === "connecting") && P && Date.now() - P.born < 10000))) continue;
+    restartPeer(u);
+  }
+}
+/* Arrière-plan / retour au premier plan pendant un appel */
+document.addEventListener("visibilitychange", () => {
+  if(!C.cur) return;
+  if(document.visibilityState === "hidden"){ C.hiddenAt = Date.now(); return; }
+  const away = C.hiddenAt ? Date.now() - C.hiddenAt : 0;
+  C.hiddenAt = 0;
+  // Les infos d'appel vues avant le départ peuvent être vieilles : on ne juge personne « parti » pendant quelques secondes.
+  C.resumeUntil = Date.now() + 8000;
+  C.micTries = 0; C.micBadSecs = 0; C.restarts = {};
+  pushMe();
+  setAudioSession(true);
+  for(const [u, P] of C.pcs) if(P.aTrack) attachAudio(u, P, true);
+  // iOS remet normalement le micro de lui-même au retour : on lui laisse 1,5 s avant de le remplacer.
+  setTimeout(() => recoverMedia(false), 1500);
+  // Absence longue : les autres nous ont considéré·e comme parti·e et ont fermé la connexion. On la refait tout de suite.
+  setTimeout(() => checkPeers(away > 40000), away > 40000 ? 1200 : 4000);
+});
 const myVideo = () => C.local ? C.local.getVideoTracks().find(t => t.readyState === "live") || null : null;
-function meEntry(){ const a = myAudio(); return {s:Date.now(), cam:!!myVideo(), mic:!!(a && a.enabled)}; }
+function meEntry(){ const a = myAudio(); return {s:Date.now(), cam:!!myVideo(), mic:!C.userMuted && !!(a && a.enabled)}; }
 function pushMe(){ if(C.cur) updateDoc(callRef(C.cur.id), {["p." + S.uid]: meEntry()}).catch(()=>{}); }
 
 /* ---------- démarrer / rejoindre / quitter ---------- */
@@ -1313,6 +1426,8 @@ function endLocal(msg){
   if(!C.cur && !C.local) return;
   clearInterval(C.hb); clearInterval(C.timer); clearInterval(C.watch); clearTimeout(C.noAnswerT); C.noAnswerT = null;
   C.preview = null; $("diag").classList.add("hidden"); $("cDiag").setAttribute("aria-expanded", "false");
+  showMicFix(false); C.userMuted = false; C.camWanted = false; C.pendingRecover = false; C.hiddenAt = 0; C.resumeUntil = 0;
+  setAudioSession(false);
   if(C.unsubSig){ try{ C.unsubSig(); }catch(e){} C.unsubSig = null; }
   for(const u of [...C.pcs.keys()]) closePeer(u);
   stopLocal();
@@ -1323,20 +1438,20 @@ function endLocal(msg){
   if(msg) toast(msg);
   renderCallBar();
 }
-window.addEventListener("pagehide", () => { if(C.cur) leaveCall(); });
+window.addEventListener("pagehide", e => { if(C.cur && !e.persisted) leaveCall(); });
 
 /* ---------- connexions pair à pair ---------- */
 function syncPeers(call){
   const parts = new Set(partsOf(call).filter(u => u !== S.uid));
   if(parts.size){ C.everJoined = true; if(C.noAnswerT){ clearTimeout(C.noAnswerT); C.noAnswerT = null; } }
-  for(const u of [...C.pcs.keys()]) if(!parts.has(u)) closePeer(u);
+  if(Date.now() >= C.resumeUntil){ for(const u of [...C.pcs.keys()]) if(!parts.has(u)) closePeer(u); }
   // Pour chaque paire, c'est la personne dont l'identifiant est le plus petit qui lance la connexion.
   for(const u of parts) if(!C.pcs.has(u) && S.uid < u) makeOffer(u, 0);
   renderCallUI();
 }
 function newPC(u, pcid){
   const pc = new RTCPeerConnection({iceServers:ICE_SERVERS});
-  const P = {pc, pcid, u, state:"new", diag:{}, fixes:0, stuck:0};
+  const P = {pc, pcid, u, state:"new", diag:{}, fixes:0, stuck:0, born:Date.now(), badSecs:0};
   pc.ontrack = e => {
     if(e.track.kind === "audio"){
       P.aTrack = e.track;
@@ -1405,10 +1520,17 @@ async function handleSig(d){
     const P = C.pcs.get(u);
     if(!P || P.pcid !== d.pcid || P.pc.signalingState !== "have-local-offer") return;
     await P.pc.setRemoteDescription({type:"answer", sdp:d.sdp});
+  }else if(d.kind === "restart"){
+    // L'autre revient d'une absence et demande une nouvelle connexion (c'est moi qui la lance).
+    if(S.uid > u) return;
+    const P = C.pcs.get(u);
+    if(P && P.role === "offer" && Date.now() - P.born < 4000 && P.pc.connectionState !== "failed") return;
+    closePeer(u, true); makeOffer(u, 0);
   }
   renderCallUI();
 }
 function onPeerFailed(u, P){
+  if(P.role === "answer"){ if(document.visibilityState === "visible") restartPeer(u); return; }
   if(P.role === "offer" && (P.tries || 0) < 2){
     closePeer(u, true);
     setTimeout(() => {
@@ -1502,8 +1624,20 @@ async function audioWatch(){
       }
     }else{ P.stuck = 0; if(d.playing && P.blocked){ P.blocked = false; refreshSoundBtn(); } }
   }
+  if(document.visibilityState === "visible"){
+    // Micro mort ou bloqué alors que l'appli est à l'écran depuis 3 s : on le remplace (sauf s'il est coupé volontairement).
+    const mp = micProblem();
+    if(mp && !C.userMuted){ C.micBadSecs++; if((mp === "ended" && C.micBadSecs >= 1) || C.micBadSecs >= 3) recoverMedia(false); }
+    else C.micBadSecs = 0;
+    if(camProblem() === "ended") recoverMedia(false);
+    // Connexion « déconnectée » depuis 10 s : on la refait.
+    for(const [u, P] of C.pcs){
+      if(P.pc.connectionState === "disconnected"){ P.badSecs = (P.badSecs || 0) + 1; if(P.badSecs >= 10){ P.badSecs = 0; restartPeer(u); } }
+      else P.badSecs = 0;
+    }
+  }
   const me = C.tiles.get(S.uid);
-  if(me){ const a = myAudio(); me.classList.toggle("micdead", !a || a.muted); }
+  if(me){ me.classList.toggle("micdead", !C.userMuted && !!micProblem()); }
   if(!$("diag").classList.contains("hidden")) renderDiag();
 }
 function renderDiag(){
@@ -1511,7 +1645,11 @@ function renderDiag(){
   const a = myAudio();
   const L = [];
   L.push(`<b>Version</b> : ${esc(VERSION)}`);
-  L.push(`<b>Ton micro</b> : ` + (!a ? `${no} arrêté par l’appareil` : a.muted ? `${no} bloqué par l’appareil (une autre app l’utilise peut-être)` : !a.enabled ? `⚠️ coupé par toi (bouton 🎙️)` : `${yes} actif`));
+  const mp = micProblem();
+  L.push(`<b>Ton micro</b> : ` + (C.userMuted ? `⚠️ coupé par toi (bouton 🎙️)` :
+    mp === "ended" ? `${no} arrêté par l’appareil` + (!$("cMicFix").classList.contains("hidden") ? " : touche le bouton jaune" : " : relance en cours…") :
+    mp === "muted" ? `${no} mis en pause par l’appareil (arrière-plan, appel téléphonique ou autre app)` : `${yes} actif`) +
+    (C.lastRecover ? " · rétabli automatiquement après une coupure" : ""));
   if(!C.pcs.size) L.push("Personne d’autre n’est encore connecté à l’appel.");
   for(const [u, P] of C.pcs){
     const d = P.diag || {}, n = esc(nameOf(u));
@@ -1536,7 +1674,7 @@ function renderCallUI(){
   if(!C.preview || C.preview.getVideoTracks()[0] !== pv){ C.preview = new MediaStream(pv ? [pv] : []); }
   if(mv.srcObject !== C.preview){ mv.srcObject = C.preview; mv.play().catch(()=>{}); }
   me.classList.toggle("mirror", C.facing === "user");
-  fillTile(me, S.uid, {cam:!!myVideo(), mic:!!(myAudio() && myAudio().enabled)}, "", true);
+  fillTile(me, S.uid, {cam:!!myVideo(), mic:!C.userMuted && !!myAudio()}, "", true);
   for(const u of parts){
     const t = tileFor(u), P = C.pcs.get(u);
     const e = (call && call.p && call.p[u]) || {};
@@ -1554,8 +1692,9 @@ function renderCallUI(){
     wait.classList.toggle("hidden", !waiting);
     if(waiting) wait.textContent = C.cur.kind === "direct" ? `Ça sonne chez ${nameOf(C.cur.to === S.uid ? C.cur.by : C.cur.to)}… (seulement si le chat est ouvert)` : "En attente des autres participants…";
   }
-  $("cMic").classList.toggle("off", !(myAudio() && myAudio().enabled));
-  $("cMic").setAttribute("aria-label", myAudio() && myAudio().enabled ? "Couper le micro" : "Rallumer le micro");
+  $("cMic").classList.toggle("off", C.userMuted || !myAudio());
+  $("cMic").setAttribute("aria-label", C.userMuted ? "Rallumer le micro" : "Couper le micro");
+  $("callIosNote").classList.toggle("hidden", !isIOS);
   $("cCam").classList.toggle("off", !myVideo());
   $("cCam").setAttribute("aria-label", myVideo() ? "Couper la caméra" : "Allumer la caméra");
   $("cFlip").classList.toggle("hidden", !myVideo() || !(isIOS || /Android/i.test(navigator.userAgent)));
@@ -1586,17 +1725,28 @@ $("cDiag").addEventListener("click", () => {
   $("cDiag").setAttribute("aria-expanded", String(!hid));
   if(!hid){ unlockSound(); renderDiag(); }
 });
-$("cMic").addEventListener("click", () => { const a = myAudio(); if(!a){ reacquireMic(); return; } a.enabled = !a.enabled; pushMe(); renderCallUI(); });
+$("cMic").addEventListener("click", () => {
+  C.userMuted = !C.userMuted;
+  const a = C.local && C.local.getAudioTracks()[0];
+  if(C.userMuted){ if(a) a.enabled = false; showMicFix(false); }
+  else if(micProblem()){ recoverMedia(true); }        // micro mort pendant qu'il était coupé : on le recrée maintenant (toucher = autorisé)
+  else if(a) a.enabled = true;
+  pushMe(); renderCallUI();
+});
+$("cMicFix").addEventListener("click", () => { C.micTries = 0; recoverMedia(true); });
 $("cCam").addEventListener("click", async () => {
   if(!C.cur || !C.local) return;
   const v = myVideo();
   if(v){
+    C.camWanted = false; v.onended = null;
     v.stop(); C.local.removeTrack(v);
     for(const P of C.pcs.values()){ const s = senderOf(P.pc, "video"); if(s) s.replaceTrack(null).catch(()=>{}); }
   }else{
     try{
       const st = await navigator.mediaDevices.getUserMedia({video:{facingMode:C.facing, width:{ideal:640}, height:{ideal:480}}});
-      const nv = st.getVideoTracks()[0]; C.local.addTrack(nv);
+      const nv = st.getVideoTracks()[0];
+      C.local.getVideoTracks().forEach(t => { t.onended = null; try{ t.stop(); }catch(e){} C.local.removeTrack(t); });
+      C.local.addTrack(nv); C.camWanted = true; watchCam();
       for(const P of C.pcs.values()){ const s = senderOf(P.pc, "video"); if(s) s.replaceTrack(nv).catch(()=>{}); }
     }catch(e){ toast("Impossible d’allumer la caméra. Vérifie l’autorisation pour ce site."); }
   }
@@ -1608,7 +1758,7 @@ $("cFlip").addEventListener("click", async () => {
   try{
     const st = await navigator.mediaDevices.getUserMedia({video:{facingMode:C.facing, width:{ideal:640}, height:{ideal:480}}});
     const nv = st.getVideoTracks()[0];
-    old.stop(); C.local.removeTrack(old); C.local.addTrack(nv);
+    old.onended = null; old.stop(); C.local.removeTrack(old); C.local.addTrack(nv); watchCam();
     for(const P of C.pcs.values()){ const s = senderOf(P.pc, "video"); if(s) s.replaceTrack(nv).catch(()=>{}); }
   }catch(e){ C.facing = C.facing === "user" ? "environment" : "user"; toast("Impossible de changer de caméra."); }
   renderCallUI();
