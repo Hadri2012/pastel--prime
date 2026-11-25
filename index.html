@@ -214,6 +214,12 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
 .remtime{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:16px;font-weight:700}
 .remtime input{font:inherit;font-size:1.1rem;padding:8px 10px;border-radius:12px;border:2px solid var(--line);background:var(--bg);color:var(--ink);min-height:44px}
 .remtime[aria-disabled="true"]{opacity:.5}
+.mentionpop{position:absolute;bottom:100%;left:10px;right:10px;max-width:420px;margin-bottom:8px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:6px;z-index:7;max-height:260px;overflow-y:auto}
+.mentionpop button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;border-radius:12px;padding:8px 10px;min-height:48px;text-align:left;font-weight:700;font-size:1rem}
+.mentionpop button.on,.mentionpop button:hover{background:var(--accent-soft)}
+.mentionpop .av{width:30px;height:30px;font-size:.8rem}
+.mentionpop .st{margin-left:auto;font-size:.78rem;color:var(--muted);font-weight:700}
+.mentionpop .none{padding:10px 12px;color:var(--muted);font-size:.9rem;margin:0}
 .netbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff0b3;color:#2d2540;border-bottom:1px solid var(--line);font-weight:800;font-size:.85rem;z-index:2}
 .netbar span{flex:1;min-width:0}
 .callbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:color-mix(in srgb,var(--ok) 18%,var(--surface));border-bottom:1px solid var(--line);font-weight:800;font-size:.9rem;z-index:2}
@@ -402,6 +408,7 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
     </div>
     <div id="photoPrev" class="photoprev hidden"><img id="photoThumb" alt=""><span id="photoLbl">Photo prête à envoyer</span><button id="photoX" class="iconbtn" type="button" aria-label="Retirer la photo">✕</button></div>
     <div id="emojipop" class="emojipop hidden"></div>
+    <div id="mentionpop" class="mentionpop hidden" role="listbox" aria-label="Personnes à mentionner"></div>
     <div id="composer" class="composer">
       <button id="btnPhoto" class="iconbtn" type="button" aria-label="Ajouter une photo">📷</button>
       <input id="inPhoto" type="file" accept="image/*" hidden>
@@ -480,7 +487,7 @@ const firebaseConfig = {
 };
 const DOMAIN = "pastelprime.local";   // les comptes sont créés en « pseudo@pastelprime.local »
 const ADMIN = "hadrien";              // ce pseudo peut supprimer les messages de tout le monde
-const VERSION = "v16 · 25 nov.";
+const VERSION = "v17 · 25 nov.";
 const PAGE = 80;                      // messages chargés à la fois
 const MAXLEN = 2000;
 
@@ -2076,6 +2083,65 @@ async function checkRemOnOpen(){
   if(Object.keys(patch).length) saveRem(patch).catch(()=>{});
 }
 
+/* ================= mentions : liste qui s'ouvre quand on tape @ ================= */
+const MP = {open:false, start:0, items:[], sel:0};
+function mentionQuery(){
+  const v = $("inMsg").value, pos = $("inMsg").selectionStart ?? v.length;
+  const before = v.slice(0, pos);
+  const m = before.match(/(^|[\s(])@([\p{L}\p{N}._-]{0,20})$/u);
+  return m ? {start: pos - m[2].length - 1, q: m[2]} : null;
+}
+function updateMentions(){
+  const mq = mentionQuery();
+  if(!mq){ closeMentions(); return; }
+  const q = fold(mq.q);
+  const list = members().filter(u => u !== S.uid)
+    .map(u => ({u, n: nameOf(u)}))
+    .filter(x => x.n && x.n !== "Quelqu’un" && fold(x.n).includes(q))
+    .sort((a, b) => (fold(b.n).startsWith(q) - fold(a.n).startsWith(q)) || (isOnline(b.u) - isOnline(a.u)) || a.n.localeCompare(b.n, "fr"));
+  MP.open = true; MP.start = mq.start; MP.items = list; MP.sel = 0;
+  renderMentions();
+}
+function renderMentions(){
+  const box = $("mentionpop");
+  if(!MP.open){ box.classList.add("hidden"); return; }
+  box.innerHTML = MP.items.length
+    ? MP.items.map((x, i) => `<button type="button" role="option" class="${i === MP.sel ? "on" : ""}" aria-selected="${i === MP.sel}" data-mi="${i}">${avatar(x.u)}<span>${esc(x.n)}</span><span class="st">${isOnline(x.u) ? "en ligne" : ""}</span></button>`).join("")
+    : `<p class="none">Personne ne correspond.</p>`;
+  box.classList.remove("hidden");
+  const on = box.querySelector("button.on"); if(on) on.scrollIntoView({block:"nearest"});
+}
+function closeMentions(){ MP.open = false; $("mentionpop").classList.add("hidden"); }
+function pickMention(i){
+  const x = MP.items[i]; if(!x) return;
+  const v = $("inMsg").value, pos = $("inMsg").selectionStart ?? v.length;
+  const ins = "@" + x.n + " ";
+  $("inMsg").value = v.slice(0, MP.start) + ins + v.slice(pos);
+  const c = MP.start + ins.length;
+  closeMentions();
+  $("inMsg").focus(); $("inMsg").setSelectionRange(c, c);
+  autosize(); refreshSend(); typingPing();
+}
+$("inMsg").addEventListener("input", updateMentions);
+$("inMsg").addEventListener("click", updateMentions);
+$("inMsg").addEventListener("blur", () => setTimeout(closeMentions, 150));
+// Clavier : flèches pour choisir, Entrée ou Tab pour insérer, Échap pour fermer (avant l'envoi par Entrée).
+$("composer").addEventListener("keydown", e => {
+  if(!MP.open || e.target !== $("inMsg")) return;
+  if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+    if(!MP.items.length) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    MP.sel = (MP.sel + (e.key === "ArrowDown" ? 1 : MP.items.length - 1)) % MP.items.length; renderMentions();
+  }else if((e.key === "Enter" || e.key === "Tab") && MP.items.length && !e.isComposing){
+    e.preventDefault(); e.stopImmediatePropagation(); pickMention(MP.sel);
+  }else if(e.key === "Escape"){
+    e.preventDefault(); e.stopImmediatePropagation(); closeMentions();
+  }
+}, true);
+// pointerdown : on garde le clavier ouvert sur téléphone pendant le choix
+$("mentionpop").addEventListener("pointerdown", e => { if(e.target.closest("[data-mi]")) e.preventDefault(); });
+$("mentionpop").addEventListener("click", e => { const b = e.target.closest("[data-mi]"); if(b) pickMention(+b.dataset.mi); });
+
 /* ================= photos ================= */
 const imgCache = new Map();   // id -> blob: URL | "loading" | "error"
 const imgTries = new Map();
@@ -2200,6 +2266,7 @@ function stopTyping(){
 setInterval(()=>{ renderPresence(); if(S.unlocked) onCallsChange(); }, 3000);
 
 async function send(){
+  closeMentions();
   const text = inMsg.value.replace(/\s+$/,"").replace(/^\n+/,"");
   const photo = S.editing ? null : S.photo;
   if(!text.trim() && !photo) return;
