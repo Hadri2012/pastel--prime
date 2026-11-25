@@ -211,6 +211,11 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
 .guide li::marker{font-weight:800;color:var(--accent)}
 .guide b{font-weight:800}
 .tip{background:var(--accent-soft);border-radius:14px;padding:10px 12px;font-size:.88rem;margin:0}
+.remtime{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:16px;font-weight:700}
+.remtime input{font:inherit;font-size:1.1rem;padding:8px 10px;border-radius:12px;border:2px solid var(--line);background:var(--bg);color:var(--ink);min-height:44px}
+.remtime[aria-disabled="true"]{opacity:.5}
+.netbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#fff0b3;color:#2d2540;border-bottom:1px solid var(--line);font-weight:800;font-size:.85rem;z-index:2}
+.netbar span{flex:1;min-width:0}
 .callbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:color-mix(in srgb,var(--ok) 18%,var(--surface));border-bottom:1px solid var(--line);font-weight:800;font-size:.9rem;z-index:2}
 .callbar span{flex:1;min-width:0}
 .ring{position:fixed;inset:0;z-index:35;background:rgba(30,20,50,.55);display:grid;place-items:center;padding:16px;animation:fade .15s}
@@ -372,6 +377,7 @@ header.top .sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:h
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
     </button>
   </header>
+  <div id="netbar" class="netbar hidden" role="status"><span id="netbarTxt"></span><button id="netbarBtn" class="btn small" type="button">Réessayer</button></div>
   <div id="callbar" class="callbar hidden"><span id="callbarTxt"></span><button id="callbarJoin" class="btn small" type="button">Rejoindre</button></div>
   <div id="pinbar" class="pinbar hidden">
     <button id="pinGo" class="go" type="button"><span class="lbl">📌 Message épinglé</span><span id="pinTxt" class="txt"></span></button>
@@ -454,8 +460,12 @@ setTimeout(function(){
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
   onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, query, where, orderBy, limit, startAfter, onSnapshot, getDoc, getDocs,
+import { getFirestore, collection, doc, query, where, orderBy, limit, startAfter, onSnapshot, getDoc, getDocs, disableNetwork, enableNetwork, serverTimestamp,
   setDoc, updateDoc, addDoc, deleteDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+/* Horloge commune : l'heure du serveur Firebase, corrigée du décalage de cet appareil.
+   Tous les horodatages partagés (présence, « écrit… », appels, messages) l'utilisent : un téléphone mal réglé ne casse plus rien. */
+let SKEW = 0;
+const now = () => Date.now() + SKEW;
 
 window.__ppStarted = true;
 
@@ -470,7 +480,7 @@ const firebaseConfig = {
 };
 const DOMAIN = "pastelprime.local";   // les comptes sont créés en « pseudo@pastelprime.local »
 const ADMIN = "hadrien";              // ce pseudo peut supprimer les messages de tout le monde
-const VERSION = "v14 · 21 nov.";
+const VERSION = "v16 · 25 nov.";
 const PAGE = 80;                      // messages chargés à la fois
 const MAXLEN = 2000;
 
@@ -527,7 +537,7 @@ function dayLabel(ts){
 }
 function ago(ts){
   if(!ts) return "pas encore venu·e";
-  const m = Math.round((Date.now()-ts)/60000);
+  const m = Math.round((now()-ts)/60000);
   if(m < 1) return "vu·e à l’instant";
   if(m < 60) return `vu·e il y a ${m} min`;
   const h = Math.round(m/60);
@@ -539,8 +549,8 @@ function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.remove("
 function show(id){ for(const s of ["boot","login","chat"]) $(s).classList.toggle("hidden", s!==id); }
 function bootMsg(msg, spin){ show("boot"); $("bootMsg").textContent = msg; $("bootSpin").classList.toggle("hidden", !spin); }
 const myRef = () => doc(db, "users", S.uid);
-let stateQ = Promise.resolve();
-function writeMe(patch){ const p = stateQ.catch(()=>{}).then(()=>updateDoc(myRef(), patch)); stateQ = p; return p; }
+/* Firestore garde l'ordre des écritures d'un même appareil et les affiche tout de suite : pas besoin de les faire attendre l'une après l'autre. */
+function writeMe(patch){ return updateDoc(myRef(), patch); }
 
 /* ================= connexion ================= */
 function setStep(n){
@@ -661,7 +671,7 @@ async function onSignedIn(user){
     const color = Math.floor(Math.random()*PALETTE.length);
     const name = S.typedName && S.typedName.toLowerCase() === S.pseudo ? S.typedName : S.pseudo;
     try{
-      await setDoc(myRef(), {name, color, invite:S.inviteCode, lastRead:0, lastSeen:Date.now(), away:false, typingUntil:0, rx:{}});
+      await setDoc(myRef(), {name, color, invite:S.inviteCode, lastRead:0, lastSeen:now(), away:false, typingUntil:0, rx:{}});
     }catch(e){ throw String(e && e.code || "").includes("permission") ? {code:"bad-invite"} : e; }
     S.isNew = true; S.entryLastRead = null;
   }else{
@@ -669,31 +679,165 @@ async function onSignedIn(user){
   }
   subscribe();
   enterChat();
+  setTimeout(() => { checkRemOnOpen().catch(()=>{}); }, 2500);
 }
+
+/* ================= temps réel : abonnements qui se réparent tout seuls =================
+   Avant : une seule erreur Firebase arrêtait un abonnement pour de bon (« Recharge la page »).
+   Maintenant chaque abonnement se relance seul, et la connexion est relancée de force quand elle reste bloquée. */
+const LIVE = {};
+function live(key, makeRef, onNext){
+  const old = LIVE[key]; if(old) old.stop();
+  const L = LIVE[key] = {key, unsub:null, fails:0, cache:false, stopped:false, timer:0, last:0};
+  const start = () => {
+    if(L.stopped) return;
+    clearTimeout(L.timer);
+    if(L.unsub){ try{ L.unsub(); }catch(e){} L.unsub = null; }
+    const onErr = e => {
+      if(L.stopped) return;
+      L.unsub = null; L.fails++;
+      console.warn("abonnement " + key + " interrompu", e && e.code);
+      const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(L.fails - 1, 5)));
+      L.timer = setTimeout(start, delay);
+      netCheck();
+    };
+    try{
+      L.unsub = onSnapshot(makeRef(), {includeMetadataChanges:true}, snap => {
+        if(L.stopped) return;
+        L.fails = 0; L.cache = !!(snap.metadata && snap.metadata.fromCache); L.last = Date.now();
+        onNext(snap);
+        netCheck();
+      }, onErr);
+    }catch(e){ onErr(e); }
+  };
+  L.restart = start;
+  L.stop = () => { L.stopped = true; clearTimeout(L.timer); if(L.unsub){ try{ L.unsub(); }catch(e){} } L.unsub = null; delete LIVE[key]; };
+  start();
+  return L;
+}
+function stopLive(key){ if(LIVE[key]) LIVE[key].stop(); }
+
+/* État de la connexion : un abonnement mort, des données « en cache » (hors ligne) ou un écho de présence qui ne revient pas = problème. */
+const NET = {badSince:0, lastKick:0, hiddenSince:0, pingSent:0, pingVal:0, kicks:0};
+function netBad(){
+  if(!S.unlocked) return false;
+  if(typeof navigator.onLine === "boolean" && !navigator.onLine) return true;
+  for(const L of Object.values(LIVE)) if(!L.unsub || L.cache) return true;
+  if(NET.pingSent && Date.now() - NET.pingSent > 15000) return true;
+  return false;
+}
+function netCheck(){
+  const bad = netBad();
+  if(bad){ if(!NET.badSince) NET.badSince = Date.now(); }
+  else NET.badSince = 0;
+  renderNetBar();
+}
+function renderNetBar(){
+  const bar = $("netbar"); if(!bar) return;
+  const show = S.unlocked && NET.badSince && Date.now() - NET.badSince > 3000;
+  bar.classList.toggle("hidden", !show);
+  if(show) $("netbarTxt").textContent = (typeof navigator.onLine === "boolean" && !navigator.onLine) ? "Pas de connexion internet. Les messages partiront au retour du réseau." : "Reconnexion en cours… Les nouveaux messages arriveront tout seuls.";
+}
+/* Relance forcée : couper puis rouvrir la connexion Firebase efface son délai d'attente (qui peut monter à 90 s) et relance tous les abonnements. */
+async function kickNetwork(reason){
+  if(!S.unlocked) return;
+  const since = Date.now() - NET.lastKick;
+  if(since < 4000){
+    // Une relance vient d'avoir lieu : on ne l'ignore pas, on la reporte de quelques secondes.
+    if(!NET.kickTimer) NET.kickTimer = setTimeout(() => { NET.kickTimer = 0; kickNetwork(reason); }, 4000 - since);
+    return;
+  }
+  clearTimeout(NET.kickTimer); NET.kickTimer = 0;
+  NET.lastKick = Date.now(); NET.kicks++;
+  console.info("reconnexion forcée :", reason);
+  try{ await disableNetwork(db); }catch(e){}
+  try{ await enableNetwork(db); }catch(e){}
+  for(const L of Object.values(LIVE)) if(!L.unsub) L.restart();
+  retryFailedImages();
+  if(C.cur) setTimeout(() => checkPeers(false), 3000);
+  setTimeout(sendPing, 1500);
+}
+/* Écho de présence : j'écris un petit « ping » sur ma fiche ; il doit me revenir par l'abonnement. S'il ne revient pas, le flux est bloqué. */
+function sendPing(){
+  if(!S.unlocked || !S.uid || document.visibilityState !== "visible") return;
+  const v = now();
+  NET.pingVal = v; NET.pingSent = Date.now();
+  writeMe({ping:v, lastSeen:v, away:false}).catch(()=>{});
+}
+function onMyDocSnapshot(d){
+  if(!d || d.metadata.hasPendingWrites) return;
+  const v = d.data() || {};
+  if(NET.pingSent && v.ping === NET.pingVal){ NET.pingSent = 0; netCheck(); }
+  if(!NET.clockDone && v.clk && typeof v.clk.toMillis === "function" && NET.clkT0){
+    const off = v.clk.toMillis() - (NET.clkT0 + NET.clkT1) / 2;
+    if(Math.abs(off) < 12 * 3600e3){ SKEW = Math.round(off); }
+    NET.clockDone = true;
+  }
+}
+/* Mesure le décalage de l'horloge de cet appareil avec celle du serveur (une fois par connexion). */
+async function syncClock(){
+  NET.clockDone = false; NET.clkT0 = Date.now();
+  try{ await writeMe({clk: serverTimestamp()}); NET.clkT1 = Date.now(); }
+  catch(e){ NET.clockDone = true; return; }
+  try{
+    const d = await getDoc(myRef());
+    onMyDocSnapshot({metadata:{hasPendingWrites:false}, data:() => d.data()});
+  }catch(e){}
+}
+setInterval(() => {
+  if(!S.unlocked) return;
+  netCheck();
+  for(const L of Object.values(LIVE)) if(!L.unsub && !L.timer) L.restart();
+  // Bloqué depuis 12 s alors que le réseau est là : on relance (au plus une fois toutes les 20 s).
+  if(NET.badSince && Date.now() - NET.badSince > 12000 && navigator.onLine !== false && Date.now() - NET.lastKick > 20000) kickNetwork("bloqué");
+}, 4000);
+window.addEventListener("online", () => kickNetwork("réseau revenu"));
+window.addEventListener("offline", netCheck);
+window.addEventListener("pageshow", e => { if(e.persisted) kickNetwork("page restaurée"); });
+document.addEventListener("visibilitychange", () => {
+  if(!S.unlocked) return;
+  if(document.visibilityState === "hidden"){ NET.hiddenSince = Date.now(); return; }
+  const away = NET.hiddenSince ? Date.now() - NET.hiddenSince : 0;
+  NET.hiddenSince = 0;
+  // Au retour au premier plan (iPhone : l'app a été suspendue), on ne fait pas confiance à l'ancien flux.
+  if(away > 3000 || netBad()) kickNetwork("retour au premier plan");
+  else sendPing();
+});
 
 function subscribe(){
   teardownListeners();
-  S.notifyFrom = Date.now() - 20000; S.notified = new Set();
+  S.notifyFrom = now() - 20000; S.notified = new Set(); S.seen = new Set();
+  S.liveLimit = PAGE;
   const slow = setTimeout(()=>{ if(!S.msgsLoaded) toast("Le chargement est lent… Vérifie ta connexion."); }, 10000);
-  S.unsubs.push(onSnapshot(collection(db, "users"), snap => {
+  live("users", () => collection(db, "users"), snap => {
     const o = {}; snap.docs.forEach(d => { o[d.id] = d.data(); });
-    S.users = o; S.usersLoaded = true; scheduleRender();
-  }, e => { toast("Connexion aux membres perdue. Recharge la page."); }));
-  S.unsubs.push(onSnapshot(query(collection(db, "messages"), orderBy("c","desc"), limit(PAGE)), {includeMetadataChanges:true}, snap => {
-    clearTimeout(slow);
+    S.users = o; S.usersLoaded = true;
+    const mine = snap.docs.find(d => d.id === S.uid); if(mine) onMyDocSnapshot(mine);
+    scheduleRender();
+  });
+  subscribeMessages(slow);
+  live("pin", () => doc(db, "meta", "pin"), snap => { S.pin = snap.exists() ? snap.data() : null; scheduleRender(); });
+  live("calls", () => query(collection(db, "calls"), where("active", "==", true)), onCallsSnapshot);
+  syncClock().then(sendPing);
+}
+/* Un seul abonnement « vivant » pour tous les messages affichés : les anciens messages chargés restent synchronisés
+   (modifications, suppressions, photos), et le bouton « messages précédents » est recalculé à chaque mise à jour. */
+function subscribeMessages(slow){
+  live("msgs", () => query(collection(db, "messages"), orderBy("c","desc"), limit(S.liveLimit)), snap => {
+    if(slow) clearTimeout(slow);
     S.recent = snap.docs.map(toMsg);
-    if(S.msgsLoaded && typeof snap.docChanges === "function"){
-      for(const ch of snap.docChanges()){
-        if(ch.type !== "added") continue;
-        const m = toMsg(ch.doc);
+    if(S.msgsLoaded){
+      for(const m of S.recent){
+        if(S.seen.has(m.id)) continue;
         if(!m.pending && m.u !== S.uid && m.c > S.notifyFrom && !S.notified.has(m.id)){ S.notified.add(m.id); onNewMessage(m); }
       }
     }
-    if(!S.msgsLoaded){ S.msgsLoaded = true; if(snap.docs.length < PAGE) S.noMore = true; }
+    for(const m of S.recent) S.seen.add(m.id);
+    S.noMore = snap.docs.length < S.liveLimit;
+    if(S.loadingOlder && !snap.metadata.fromCache){ S.loadingOlder = false; S.anchor = true; }
+    S.msgsLoaded = true;
     scheduleRender();
-  }, e => { clearTimeout(slow); toast("Connexion aux messages perdue. Recharge la page."); }));
-  S.unsubs.push(onSnapshot(doc(db, "meta", "pin"), snap => { S.pin = snap.exists() ? snap.data() : null; scheduleRender(); }, ()=>{}));
-  S.unsubs.push(onSnapshot(query(collection(db, "calls"), where("active", "==", true)), onCallsSnapshot, ()=>{}));
+  });
 }
 function toMsg(d){
   const v = d.data() || {};
@@ -703,7 +847,11 @@ function toMsg(d){
     img:typeof v.img==="string" ? v.img : "", iw:+v.iw||4, ih:+v.ih||3,
     pending:d.metadata.hasPendingWrites };
 }
-function teardownListeners(){ S.unsubs.forEach(u=>{ try{u();}catch(e){} }); S.unsubs = []; }
+function teardownListeners(){
+  S.unsubs.forEach(u=>{ try{u();}catch(e){} }); S.unsubs = [];
+  for(const L of Object.values(LIVE)) L.stop();
+  NET.badSince = 0; NET.pingSent = 0; renderNetBar();
+}
 function teardown(){
   if(C.cur) leaveCall(); setRinging(null); C.calls = {}; renderCallBar();
   teardownListeners(); clearInterval(heartbeat); setBadge(0);
@@ -716,7 +864,7 @@ function enterChat(){
   S.unlocked = true;
   show("chat");
   S.firstPaint = true;
-  writeMe({lastSeen:Date.now(), away:false}).catch(()=>{});
+  writeMe({lastSeen:now(), away:false}).catch(()=>{});
   try{
     if(!localStorage.getItem("pp_notif_hint")){
       const need = notifSupported ? Notification.permission === "default" : (isIOS && !isStandalone);
@@ -724,21 +872,18 @@ function enterChat(){
     }
   }catch(e){}
   clearInterval(heartbeat);
-  heartbeat = setInterval(()=>{
-    if(document.visibilityState === "visible") writeMe({lastSeen:Date.now(), away:false}).catch(()=>{});
-    renderPresence();
-  }, 120000);
+  heartbeat = setInterval(()=>{ sendPing(); renderPresence(); }, 60000);
   scheduleRender();
 }
 async function lock(){
   if(C.cur) await leaveCall();
-  try{ await writeMe({lastSeen:Date.now(), away:true, typingUntil:0}); }catch(e){}
+  try{ await writeMe({lastSeen:now(), away:true, typingUntil:0}); }catch(e){}
   await signOut(auth).catch(()=>{});
 }
-window.addEventListener("pagehide", ()=>{ if(S.unlocked) writeMe({lastSeen:Date.now(), away:true, typingUntil:0}).catch(()=>{}); });
+window.addEventListener("pagehide", ()=>{ if(S.unlocked) writeMe({lastSeen:now(), away:true, typingUntil:0}).catch(()=>{}); });
 document.addEventListener("visibilitychange", ()=>{
   if(!S.unlocked) return;
-  if(document.visibilityState === "visible"){ writeMe({lastSeen:Date.now(), away:false}).catch(()=>{}); maybeMarkRead(); }
+  if(document.visibilityState === "visible"){ writeMe({lastSeen:now(), away:false}).catch(()=>{}); maybeMarkRead(); }
   else stopTyping();
 });
 
@@ -753,11 +898,11 @@ function lastReadOf(uid){ const s=S.users[uid]; return s && typeof s.lastRead===
 function readersOf(m){ return members().filter(u => u !== m.u && lastReadOf(u) >= m.c); }
 function isOnline(uid){
   if(uid === S.uid) return S.unlocked;
-  const s = S.users[uid]; return !!(s && !s.away && s.lastSeen && Date.now()-s.lastSeen < 200000);
+  const s = S.users[uid]; return !!(s && !s.away && s.lastSeen && now()-s.lastSeen < 200000);
 }
 function typingNames(){
-  const now = Date.now();
-  return members().filter(u => u !== S.uid && isOnline(u) && (S.users[u].typingUntil||0) > now && (S.users[u].typingUntil||0) < now+20000).map(u=>nameOf(u));
+  const tnow = now();
+  return members().filter(u => u !== S.uid && isOnline(u) && (S.users[u].typingUntil||0) > tnow && (S.users[u].typingUntil||0) < tnow+20000).map(u=>nameOf(u));
 }
 function reactionsMap(){
   const map = {};
@@ -901,7 +1046,7 @@ function renderMessages(msgs){
       const src = imgCache.get(m.img);
       const ratio = Math.min(Math.max(m.iw/m.ih, 0.5), 2);
       photo = `<span class="photo" role="button" tabindex="0" data-img="${esc(m.img)}" style="aspect-ratio:${ratio}" aria-label="Voir la photo en grand">`
-        + (src && src !== "loading" && src !== "error" ? `<img src="${src}" alt="Photo de ${esc(nameOf(m.u, m.n))}">` : `<span class="ph">${src === "error" ? "Photo indisponible" : "Chargement de la photo…"}</span>`)
+        + (src && src !== "loading" && src !== "error" && src !== "retry" ? `<img src="${src}" alt="Photo de ${esc(nameOf(m.u, m.n))}">` : `<span class="ph">${src === "error" ? "Photo indisponible : touche pour réessayer" : "Chargement de la photo…"}</span>`)
         + `</span>`;
     }
     const txt = m.t.trim() ? `<div class="text">${renderText(m.t)}</div>` : "";
@@ -969,17 +1114,12 @@ function updateTitle(msgs){
   setBadge(n);
 }
 
-async function loadOlder(){
+function loadOlder(){
   if(S.loadingOlder || S.noMore) return;
-  const msgs = S._msgs; if(!msgs.length) return;
   S.loadingOlder = true; scheduleRender();
-  try{
-    const snap = await getDocs(query(collection(db, "messages"), orderBy("c","desc"), startAfter(msgs[0].c), limit(PAGE)));
-    snap.docs.forEach(d => S.older.set(d.id, toMsg(d)));
-    if(snap.docs.length < PAGE) S.noMore = true;
-    S.anchor = true;
-  }catch(e){ toast("Impossible de charger les messages précédents."); }
-  S.loadingOlder = false; scheduleRender();
+  S.liveLimit = Math.min(S.liveLimit + PAGE, 1000);      // on élargit l'abonnement : les anciens messages restent en direct
+  subscribeMessages(null);
+  setTimeout(() => { if(S.loadingOlder){ S.loadingOlder = false; scheduleRender(); } }, 12000);
 }
 
 /* ================= notifications ================= */
@@ -1089,7 +1229,8 @@ function openHelp(tab){
   openSheet(`<h2>Installer le chat et recevoir les notifications</h2>
     <div class="tabs" role="tablist">${Object.entries(GUIDES).map(([k,g])=>`<button type="button" role="tab" data-tab="${k}" class="${k===tab?"on":""}" aria-selected="${k===tab}">${g.label}</button>`).join("")}</div>
     <div id="guideBody">${GUIDES[tab].html}</div>
-    <p class="tip">Les notifications arrivent seulement quand le chat est ouvert, même en arrière-plan. Si le téléphone met le chat en pause, les nouveaux messages s’afficheront à la prochaine ouverture.</p>
+    <p class="tip">Les notifications de nouveaux messages arrivent seulement quand le chat est ouvert, même en arrière-plan. Si le téléphone met le chat en pause, les nouveaux messages s’afficheront à la prochaine ouverture.</p>
+    <p class="tip">⏰ Le rappel quotidien, lui, arrive même app fermée : 👤 → Rappel quotidien, puis choisis ton heure.</p>
     <button class="btn ghost" type="button" data-x>Fermer</button>`);
   const sh = $("sheet");
   sh.querySelectorAll("[data-tab]").forEach(b => b.onclick = ()=>{
@@ -1116,9 +1257,9 @@ const videoC = () => ({facingMode:C.facing, width:{ideal:640}, height:{ideal:480
 function setAudioSession(on){ try{ if(navigator.audioSession) navigator.audioSession.type = on ? "play-and-record" : "auto"; }catch(e){} }
 const rtcOK = !!(window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
-function freshP(e){ return !!(e && typeof e.s === "number" && Date.now() - e.s < 45000); }
+function freshP(e){ return !!(e && typeof e.s === "number" && now() - e.s < 45000); }
 function partsOf(call){ return call ? Object.entries(call.p || {}).filter(([u,e]) => freshP(e)).map(([u]) => u) : []; }
-function callAlive(call){ return !!(call && call.active && (partsOf(call).length > 0 || Date.now() - (call.c||0) < 45000)); }
+function callAlive(call){ return !!(call && call.active && (partsOf(call).length > 0 || now() - (call.c||0) < 45000)); }
 function callLabel(call){
   const t = call.type === "video" ? "vidéo" : "audio";
   return call.kind === "group" ? `Appel ${t} de groupe` : `Appel ${t}`;
@@ -1144,10 +1285,10 @@ function onCallsChange(){
   // nettoyage des appels abandonnés (appareil fermé sans raccrocher)
   for(const call of Object.values(C.calls)){
     if(C.cur && call.id === C.cur.id) continue;              // l'appel où je suis n'est pas abandonné
-    if(Date.now() < C.resumeUntil) continue;                  // infos peut-être périmées juste après un retour
+    if(now() < C.resumeUntil) continue;                  // infos peut-être périmées juste après un retour
     if(call.active && !callAlive(call) && !C.cleaned.has(call.id)){
       C.cleaned.add(call.id);
-      updateDoc(callRef(call.id), {active:false, ended:Date.now()}).catch(()=>{});
+      updateDoc(callRef(call.id), {active:false, ended:now()}).catch(()=>{});
     }
   }
   // sonnerie
@@ -1155,7 +1296,7 @@ function onCallsChange(){
   if(!C.cur){
     for(const call of Object.values(C.calls)){
       if(!callAlive(call) || C.dismissed.has(call.id) || partsOf(call).includes(S.uid)) continue;
-      const age = Date.now() - (call.c||0);
+      const age = now() - (call.c||0);
       if(call.kind === "direct" && call.to === S.uid && age < 45000){ ring = call; break; }
       if(call.kind === "group" && call.by !== S.uid && age < 60000 && !ring) ring = call;
     }
@@ -1215,7 +1356,7 @@ $("ringYes").addEventListener("click", () => { const c = C.ringing; if(!c) retur
 $("ringNo").addEventListener("click", () => {
   const c = C.ringing; if(!c) return;
   C.dismissed.add(c.id); setRinging(null);
-  if(c.kind === "direct") updateDoc(callRef(c.id), {declined:true, active:false, ended:Date.now()}).catch(()=>{});
+  if(c.kind === "direct") updateDoc(callRef(c.id), {declined:true, active:false, ended:now()}).catch(()=>{});
   renderCallBar();
 });
 
@@ -1326,7 +1467,7 @@ function restartPeer(u){
   C.restarts[u] = n + 1;
   closePeer(u, true);
   if(S.uid < u) makeOffer(u, 0);
-  else sendSig(u, "restart", "x" + Date.now(), "").catch(()=>{});
+  else sendSig(u, "restart", "x" + now(), "").catch(()=>{});
 }
 function checkPeers(force){
   if(!C.cur) return;
@@ -1335,18 +1476,18 @@ function checkPeers(force){
   for(const u of parts){
     const P = C.pcs.get(u);
     const st = P ? P.pc.connectionState : "none";
-    if(!force && (st === "connected" || ((st === "new" || st === "connecting") && P && Date.now() - P.born < 10000))) continue;
+    if(!force && (st === "connected" || ((st === "new" || st === "connecting") && P && now() - P.born < 10000))) continue;
     restartPeer(u);
   }
 }
 /* Arrière-plan / retour au premier plan pendant un appel */
 document.addEventListener("visibilitychange", () => {
   if(!C.cur) return;
-  if(document.visibilityState === "hidden"){ C.hiddenAt = Date.now(); return; }
-  const away = C.hiddenAt ? Date.now() - C.hiddenAt : 0;
+  if(document.visibilityState === "hidden"){ C.hiddenAt = now(); return; }
+  const away = C.hiddenAt ? now() - C.hiddenAt : 0;
   C.hiddenAt = 0;
   // Les infos d'appel vues avant le départ peuvent être vieilles : on ne juge personne « parti » pendant quelques secondes.
-  C.resumeUntil = Date.now() + 8000;
+  C.resumeUntil = now() + 8000;
   C.micTries = 0; C.micBadSecs = 0; C.restarts = {};
   pushMe();
   setAudioSession(true);
@@ -1357,7 +1498,7 @@ document.addEventListener("visibilitychange", () => {
   setTimeout(() => checkPeers(away > 40000), away > 40000 ? 1200 : 4000);
 });
 const myVideo = () => C.local ? C.local.getVideoTracks().find(t => t.readyState === "live") || null : null;
-function meEntry(){ const a = myAudio(); return {s:Date.now(), cam:!!myVideo(), mic:!C.userMuted && !!(a && a.enabled)}; }
+function meEntry(){ const a = myAudio(); return {s:now(), cam:!!myVideo(), mic:!C.userMuted && !!(a && a.enabled)}; }
 function pushMe(){ if(C.cur) updateDoc(callRef(C.cur.id), {["p." + S.uid]: meEntry()}).catch(()=>{}); }
 
 /* ---------- démarrer / rejoindre / quitter ---------- */
@@ -1369,15 +1510,15 @@ async function startCall(kind, type, to){
     if(live){ joinCall(live.id); return; }
   }
   if(!(await getMedia(type))) return;
-  const now = Date.now();
+  const tnow = now();
   try{
-    const ref = await addDoc(collection(db, "calls"), {by:S.uid, to:to || "", kind, type, c:now, active:true, p:{[S.uid]: meEntry()}});
+    const ref = await addDoc(collection(db, "calls"), {by:S.uid, to:to || "", kind, type, c:tnow, active:true, p:{[S.uid]: meEntry()}});
     C.cur = {id:ref.id, kind, type, to:to || "", by:S.uid};
   }catch(e){ stopLocal(); toast("L’appel n’a pas pu démarrer. Vérifie ta connexion."); return; }
-  C.joinedAt = now; C.everJoined = false;
+  C.joinedAt = tnow; C.everJoined = false;
   openCall();
   if(kind === "group"){
-    addDoc(collection(db, "messages"), {uid:S.uid, n:S.pseudo, c:Date.now(),
+    addDoc(collection(db, "messages"), {uid:S.uid, n:S.pseudo, c:now(),
       t:(type === "video" ? "🎥 J’ai lancé un appel vidéo de groupe." : "📞 J’ai lancé un appel audio de groupe.") + " Touche « Rejoindre » en haut du fil."}).catch(()=>{});
   }else{
     C.noAnswerT = setTimeout(() => { if(C.cur && !C.everJoined) leaveCall(`${nameOf(to)} n’a pas décroché.`); }, 45000);
@@ -1390,21 +1531,24 @@ async function joinCall(id){
   if(!rtcOK){ toast("Ce navigateur ne permet pas les appels."); return; }
   if(!(await getMedia(call.type))) return;
   C.cur = {id, kind:call.kind, type:call.type, to:call.to || "", by:call.by};
-  C.joinedAt = Date.now(); C.everJoined = true;
+  C.joinedAt = now(); C.everJoined = true;
   try{ await updateDoc(callRef(id), {["p." + S.uid]: meEntry()}); }
   catch(e){ endLocal("Impossible de rejoindre l’appel."); return; }
   openCall();
 }
 function openCall(){
-  C.startedAt = Date.now();
-  C.unsubSig = onSnapshot(query(collection(db, "calls", C.cur.id, "sig"), where("to", "==", S.uid)), snap => {
-    for(const ch of snap.docChanges()){
-      if(ch.type !== "added") continue;
-      const d = ch.doc.data();
-      deleteDoc(doc(db, "calls", C.cur ? C.cur.id : "x", "sig", ch.doc.id)).catch(()=>{});
+  C.startedAt = now();
+  const cid = C.cur.id; C.sigSeen = new Set();
+  live("sig", () => query(collection(db, "calls", cid, "sig"), where("to", "==", S.uid)), snap => {
+    for(const d0 of snap.docs){
+      if(C.sigSeen.has(d0.id) || d0.metadata.hasPendingWrites) continue;
+      C.sigSeen.add(d0.id);
+      const d = d0.data();
+      deleteDoc(doc(db, "calls", cid, "sig", d0.id)).catch(()=>{});
       handleSig(d).catch(e => console.warn("signal", e));
     }
-  }, () => {});
+  });
+  C.unsubSig = () => stopLive("sig");
   clearInterval(C.hb); C.hb = setInterval(pushMe, 15000);
   clearInterval(C.timer); C.timer = setInterval(renderCallTop, 1000);
   clearInterval(C.watch); C.watch = setInterval(() => { audioWatch().catch(()=>{}); }, 1000);
@@ -1417,7 +1561,7 @@ async function leaveCall(msg){
   const cur = C.cur, call = C.calls[cur.id];
   const others = partsOf(call).filter(u => u !== S.uid);
   const patch = {["p." + S.uid]: deleteField()};
-  if(!others.length || cur.kind === "direct") Object.assign(patch, {active:false, ended:Date.now()});
+  if(!others.length || cur.kind === "direct") Object.assign(patch, {active:false, ended:now()});
   endLocal(msg || "Appel terminé.");
   return updateDoc(callRef(cur.id), patch).catch(()=>{});
 }
@@ -1444,14 +1588,14 @@ window.addEventListener("pagehide", e => { if(C.cur && !e.persisted) leaveCall()
 function syncPeers(call){
   const parts = new Set(partsOf(call).filter(u => u !== S.uid));
   if(parts.size){ C.everJoined = true; if(C.noAnswerT){ clearTimeout(C.noAnswerT); C.noAnswerT = null; } }
-  if(Date.now() >= C.resumeUntil){ for(const u of [...C.pcs.keys()]) if(!parts.has(u)) closePeer(u); }
+  if(now() >= C.resumeUntil){ for(const u of [...C.pcs.keys()]) if(!parts.has(u)) closePeer(u); }
   // Pour chaque paire, c'est la personne dont l'identifiant est le plus petit qui lance la connexion.
   for(const u of parts) if(!C.pcs.has(u) && S.uid < u) makeOffer(u, 0);
   renderCallUI();
 }
 function newPC(u, pcid){
   const pc = new RTCPeerConnection({iceServers:ICE_SERVERS});
-  const P = {pc, pcid, u, state:"new", diag:{}, fixes:0, stuck:0, born:Date.now(), badSecs:0};
+  const P = {pc, pcid, u, state:"new", diag:{}, fixes:0, stuck:0, born:now(), badSecs:0};
   pc.ontrack = e => {
     if(e.track.kind === "audio"){
       P.aTrack = e.track;
@@ -1480,7 +1624,7 @@ function waitIce(pc){
 }
 async function sendSig(to, kind, pcid, sdp){
   if(!C.cur) return;
-  await addDoc(collection(db, "calls", C.cur.id, "sig"), {from:S.uid, to, kind, pcid, sdp, c:Date.now()});
+  await addDoc(collection(db, "calls", C.cur.id, "sig"), {from:S.uid, to, kind, pcid, sdp, c:now()});
 }
 async function makeOffer(u, tries){
   const pcid = Math.random().toString(36).slice(2, 10);
@@ -1524,7 +1668,7 @@ async function handleSig(d){
     // L'autre revient d'une absence et demande une nouvelle connexion (c'est moi qui la lance).
     if(S.uid > u) return;
     const P = C.pcs.get(u);
-    if(P && P.role === "offer" && Date.now() - P.born < 4000 && P.pc.connectionState !== "failed") return;
+    if(P && P.role === "offer" && now() - P.born < 4000 && P.pc.connectionState !== "failed") return;
     closePeer(u, true); makeOffer(u, 0);
   }
   renderCallUI();
@@ -1710,7 +1854,7 @@ function fillTile(t, u, e, state, isMe){
 }
 function renderCallTop(){
   if(!C.cur) return;
-  const s = Math.floor((Date.now() - C.startedAt) / 1000);
+  const s = Math.floor((now() - C.startedAt) / 1000);
   const call = C.calls[C.cur.id] || C.cur;
   const who = C.cur.kind === "direct" ? " avec " + nameOf(C.cur.by === S.uid ? C.cur.to : C.cur.by) : "";
   $("callTitle").textContent = callLabel(call) + who;
@@ -1788,19 +1932,171 @@ function openCallSheet(){
   sh.querySelectorAll("[data-d]").forEach(b => b.onclick = () => { closeSheet(); startCall("direct", b.dataset.d, b.dataset.u); });
 }
 $("btnCall").addEventListener("click", openCallSheet);
+$("netbarBtn").addEventListener("click", () => { NET.lastKick = 0; kickNetwork("bouton Réessayer"); });
+
+/* ================= rappel quotidien (même app fermée) =================
+   Une page web ne peut pas programmer elle-même une notification quand elle est fermée.
+   L'appareil s'abonne donc aux notifications « push », et un petit robot (GitHub Actions, fichier rappel-envoyer.mjs)
+   lui envoie le rappel chaque jour à l'heure choisie. Les réglages de rappel sont à part (collection « push »),
+   lisibles seulement par leur propriétaire et par le robot, qui ne peut rien lire du chat. */
+const VAPID_PUBLIC = "BMrjLJ8BiWlbcVcPVRlklm-5u60RUXxLpDWgJyvnkiYVKl_4AjzJvAnRwMHC1SylNKyiZdNHiUqfCsUMeIv3YVE";
+const pushSupported = ("serviceWorker" in navigator) && ("PushManager" in window) && notifSupported;
+const REM_DEFAULT_TIME = "18:00";
+function devId(){
+  try{
+    let d = localStorage.getItem("pp_dev");
+    if(!d || !/^[A-Za-z0-9]{6,40}$/.test(d)){
+      const a = new Uint8Array(12); crypto.getRandomValues(a);
+      d = Array.from(a, x => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[x % 62]).join("");
+      localStorage.setItem("pp_dev", d);
+    }
+    return d;
+  }catch(e){ return "nostore" + (S.uid || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 10); }
+}
+const remRef = () => doc(db, "push", S.uid + "_" + devId());
+const myTz = () => { try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Brussels"; }catch(e){ return "Europe/Brussels"; } };
+function b64urlToU8(b64){
+  const pad = "=".repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+function u8ToB64url(buf){
+  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function swReady(){
+  if(swReg) return Promise.resolve(swReg);
+  if(!("serviceWorker" in navigator)) return Promise.reject(new Error("no-sw"));
+  return Promise.race([navigator.serviceWorker.ready, new Promise((_, rej) => setTimeout(() => rej(new Error("sw-timeout")), 8000))]);
+}
+/* Abonnement push de cet appareil (réutilise l'existant s'il est fait avec la bonne clé). */
+async function pushSubscribe(){
+  const reg = await swReady();
+  let sub = await reg.pushManager.getSubscription();
+  if(sub && sub.options && sub.options.applicationServerKey && u8ToB64url(sub.options.applicationServerKey) !== VAPID_PUBLIC){
+    try{ await sub.unsubscribe(); }catch(e){}
+    sub = null;
+  }
+  if(!sub) sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64urlToU8(VAPID_PUBLIC)});
+  const j = sub.toJSON();
+  return {endpoint:j.endpoint, keys:{p256dh:j.keys.p256dh, auth:j.keys.auth}};
+}
+const REM = {doc:null, loaded:false, busy:false, msg:""};
+async function loadRem(){
+  try{ const d = await getDoc(remRef()); REM.doc = d.exists() ? d.data() : null; }catch(e){}
+  REM.loaded = true;
+  return REM.doc;
+}
+async function saveRem(patch){
+  const base = {uid:S.uid, dev:devId(), tz:myTz(), updated:now()};
+  if(REM.doc){ await updateDoc(remRef(), Object.assign({}, base, patch)); REM.doc = Object.assign({}, REM.doc, base, patch); }
+  else { const full = Object.assign({on:false, time:REM_DEFAULT_TIME, lastSent:"", dead:false}, base, patch); await setDoc(remRef(), full); REM.doc = full; }
+}
+function todayLocal(){ const d = new Date(now()); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function minutesNow(){ const d = new Date(now()); return d.getHours()*60 + d.getMinutes(); }
+function remStatus(){
+  if(!pushSupported){
+    return isIOS && !isStandalone
+      ? "Sur iPhone : ajoute d’abord le chat à l’écran d’accueil (Partager → Sur l’écran d’accueil), ouvre-le depuis l’icône, puis reviens ici."
+      : "Ce navigateur ne permet pas les rappels quand l’app est fermée.";
+  }
+  if(Notification.permission === "denied") return "Les notifications sont bloquées pour ce site : autorise-les dans les réglages de l’appareil.";
+  if(REM.msg) return REM.msg;
+  const d = REM.doc;
+  if(!d || !d.on) return "Rappel désactivé sur cet appareil.";
+  if(d.dead) return "Le rappel ne peut plus atteindre cet appareil : décoche puis recoche « Me rappeler chaque jour » pour le réactiver.";
+  const parts = (d.time || REM_DEFAULT_TIME).split(":").map(Number);
+  const when = (d.lastSent === todayLocal() || minutesNow() > parts[0]*60 + parts[1] + 30) ? "demain" : "aujourd’hui";
+  return "Prochain rappel : " + when + " vers " + d.time + ". Il peut arriver jusqu’à 15 minutes plus tard, parfois davantage.";
+}
+function renderRem(){
+  const st = $("remState"); if(!st) return;
+  st.textContent = remStatus();
+  const on = !!(REM.doc && REM.doc.on && !REM.doc.dead);
+  const tg = $("tgRem"); if(tg){ tg.checked = on; tg.disabled = REM.busy || !pushSupported || Notification.permission === "denied"; }
+  const tm = $("remTime"); if(tm){ if(document.activeElement !== tm && !tm.dataset.touched) tm.value = (REM.doc && REM.doc.time) || REM_DEFAULT_TIME; tm.disabled = REM.busy; }
+  const bt = $("btnRemTest"); if(bt) bt.classList.toggle("hidden", !on);
+}
+/* Activer : appelé directement par le toucher (obligatoire sur iPhone pour demander l'autorisation). */
+async function enableRem(){
+  REM.msg = ""; REM.busy = true;
+  const time = ($("remTime") && $("remTime").value) || (REM.doc && REM.doc.time) || REM_DEFAULT_TIME;
+  // La demande d'autorisation part tout de suite, avant toute autre attente.
+  const perm = Notification.permission === "granted" ? Promise.resolve("granted") : Notification.requestPermission();
+  renderRem();
+  try{
+    if(await perm !== "granted"){ REM.msg = "Sans autorisation des notifications, le rappel ne peut pas arriver."; return; }
+    NOTIF.on = true;
+    const sub = await pushSubscribe();
+    if(!REM.loaded) await loadRem();
+    await saveRem({on:true, sub, time, dead:false});
+    toast("⏰ Rappel quotidien activé.");
+  }catch(e){
+    console.warn("rappel", e);
+    REM.msg = String(e && e.code || "").includes("permission") ? "Le serveur refuse le réglage : l’animateur doit mettre à jour les règles Firebase (section « push »)."
+      : "Impossible d’activer le rappel sur cet appareil. Vérifie ta connexion et réessaie.";
+  }finally{ REM.busy = false; renderRem(); }
+}
+async function disableRem(){
+  REM.msg = ""; REM.busy = true; renderRem();
+  try{ if(!REM.loaded) await loadRem(); if(REM.doc) await saveRem({on:false}); toast("Rappel quotidien désactivé."); }
+  catch(e){ REM.msg = "Le réglage n’a pas pu être enregistré. Réessaie."; }
+  finally{ REM.busy = false; renderRem(); }
+}
+async function setRemTime(t){
+  if(!/^\d{2}:\d{2}$/.test(t)) return;
+  if(!REM.doc){ renderRem(); return; }        // pas encore activé : l'heure servira au moment de l'activation
+  const parts = t.split(":").map(Number);
+  const patch = {time:t};
+  // Nouvelle heure encore à venir aujourd'hui : le rappel d'aujourd'hui pourra partir à cette heure-là.
+  if(parts[0]*60 + parts[1] > minutesNow()) patch.lastSent = "";
+  try{ await saveRem(patch); REM.msg = ""; }catch(e){ REM.msg = "La nouvelle heure n’a pas pu être enregistrée."; }
+  renderRem();
+}
+async function testRem(){
+  try{ await saveRem({testAt: now()}); REM.msg = "Test demandé : il arrivera d’ici 15 minutes environ. Ferme complètement l’app pour vérifier que ça marche app fermée."; }
+  catch(e){ REM.msg = "Le test n’a pas pu être demandé. Réessaie."; }
+  renderRem();
+}
+/* À chaque ouverture : si le rappel est activé ici, on vérifie que l'abonnement est toujours valable et on le renouvelle si besoin. */
+async function checkRemOnOpen(){
+  if(!pushSupported || !S.uid) return;
+  const d = await loadRem();
+  if(!d || !d.on) return;
+  const patch = {};
+  if(d.tz !== myTz()) patch.tz = myTz();
+  if(Notification.permission === "granted"){
+    try{
+      const reg = await swReady();
+      const cur = await reg.pushManager.getSubscription();
+      if(!cur || d.dead || !d.sub || cur.endpoint !== d.sub.endpoint){ patch.sub = await pushSubscribe(); patch.dead = false; }
+    }catch(e){
+      if(d.dead) toast("⏰ Ton rappel quotidien est arrêté sur cet appareil : 👤 → Rappel quotidien pour le réactiver.");
+    }
+  }
+  if(Object.keys(patch).length) saveRem(patch).catch(()=>{});
+}
 
 /* ================= photos ================= */
 const imgCache = new Map();   // id -> blob: URL | "loading" | "error"
+const imgTries = new Map();
 async function loadImg(id){
   imgCache.set(id, "loading");
   try{
     const d = await getDoc(doc(db, "images", id));
     const data = d.exists() ? d.data().data : "";
-    if(typeof data !== "string" || !data.startsWith("data:image/jpeg;base64,")) throw 0;
+    if(typeof data !== "string" || !data.startsWith("data:image/jpeg;base64,")) throw {code: d.exists() ? "bad" : "missing"};
     const blob = await (await fetch(data)).blob();
-    imgCache.set(id, URL.createObjectURL(blob));
-  }catch(e){ imgCache.set(id, "error"); }
+    imgCache.set(id, URL.createObjectURL(blob)); imgTries.delete(id);
+  }catch(e){
+    // Réseau absent ou photo pas encore arrivée : on réessaie (2, 4, 8… s), puis on laisse un bouton.
+    const n = (imgTries.get(id) || 0) + 1; imgTries.set(id, n);
+    if(n <= 6){ imgCache.set(id, "retry"); setTimeout(() => { if(imgCache.get(id) === "retry") loadImg(id); }, Math.min(30000, 1000 * Math.pow(2, n))); }
+    else imgCache.set(id, "error");
+  }
   scheduleRender();
+}
+function retryFailedImages(){
+  for(const [id, v] of imgCache) if(v === "error" || v === "retry"){ imgTries.delete(id); loadImg(id); }
 }
 function loadImage(file){
   return new Promise((res, rej) => {
@@ -1866,7 +2162,7 @@ function maybeMarkRead(){
   readT = setTimeout(()=>{
     if(latest <= Math.max(lastReadOf(S.uid), S.lastReadSent)) return;
     S.lastReadSent = latest; updateTitle(S._msgs);
-    writeMe({lastRead: latest, lastSeen: Date.now(), away:false}).catch(()=>{ S.lastReadSent = 0; });
+    writeMe({lastRead: latest, lastSeen: now(), away:false}).catch(()=>{ S.lastReadSent = 0; });
   }, 1200);
 }
 window.addEventListener("focus", maybeMarkRead);
@@ -1895,11 +2191,11 @@ $("btnSend").addEventListener("click", ()=>{ send(); inMsg.focus(); });
 function typingPing(){
   if(!S.unlocked) return;
   if(!inMsg.value.trim() || S.editing){ stopTyping(); return; }
-  const now = Date.now();
-  if(S.typingSentUntil - now < 2500){ S.typingSentUntil = now + 7000; writeMe({typingUntil:S.typingSentUntil}).catch(()=>{}); }
+  const tnow = now();
+  if(S.typingSentUntil - tnow < 2500){ S.typingSentUntil = tnow + 7000; writeMe({typingUntil:S.typingSentUntil}).catch(()=>{}); }
 }
 function stopTyping(){
-  if(S.typingSentUntil > Date.now()){ S.typingSentUntil = 0; writeMe({typingUntil:0}).catch(()=>{}); }
+  if(S.typingSentUntil > now()){ S.typingSentUntil = 0; writeMe({typingUntil:0}).catch(()=>{}); }
 }
 setInterval(()=>{ renderPresence(); if(S.unlocked) onCallsChange(); }, 3000);
 
@@ -1913,12 +2209,12 @@ async function send(){
     const m = findMsg(S.editing);
     cancelCtx(); inMsg.value = ""; autosize(); refreshSend();
     if(!m || m.u !== S.uid || m.t === text) return;
-    try{ await updateDoc(doc(db, "messages", m.id), {t:text, e:Date.now()}); }
+    try{ await updateDoc(doc(db, "messages", m.id), {t:text, e:now()}); }
     catch(e){ toast("La modification n’a pas été enregistrée. Réessaie."); }
     return;
   }
   const last = S._msgs.length ? S._msgs[S._msgs.length-1].c : 0;
-  const c = Math.max(Date.now(), last + 1);
+  const c = Math.max(now(), last + 1);
   const msg = {uid:S.uid, n:S.pseudo, t:text.trim() ? text : "", c};
   if(S.replyTo){ const o = findMsg(S.replyTo); if(o) msg.r = {id:o.id, u:o.u}; }
   const backup = text;
@@ -1927,13 +2223,13 @@ async function send(){
   try{
     if(photo){
       toast("Envoi de la photo…");
-      const ref = await addDoc(collection(db, "images"), {uid:S.uid, data:photo.data, c:Date.now(), w:photo.w, h:photo.h});
+      const ref = await addDoc(collection(db, "images"), {uid:S.uid, data:photo.data, c:now(), w:photo.w, h:photo.h});
       msg.img = ref.id; msg.iw = photo.w; msg.ih = photo.h;
-      msg.c = Math.max(Date.now(), c);
+      msg.c = Math.max(now(), c);
     }
     await addDoc(collection(db, "messages"), msg);
     S.lastReadSent = Math.max(S.lastReadSent, c);
-    writeMe({lastRead: Math.max(c, lastReadOf(S.uid)), lastSeen: Date.now(), away:false}).catch(()=>{});
+    writeMe({lastRead: Math.max(c, lastReadOf(S.uid)), lastSeen: now(), away:false}).catch(()=>{});
   }catch(e){
     if(!inMsg.value){ inMsg.value = backup; autosize(); }
     if(photo && !S.photo){ S.photo = photo; $("photoThumb").src = photo.data; $("photoLbl").textContent = "Photo non envoyée : réessaie"; $("photoPrev").classList.remove("hidden"); }
@@ -1986,7 +2282,7 @@ $("list").addEventListener("click", e => {
   const chip = e.target.closest("[data-react]"); if(chip){ setReact(chip.dataset.react, chip.dataset.e); return; }
   const info = e.target.closest("[data-info]"); if(info){ openInfo(info.dataset.info); return; }
   const jump = e.target.closest("[data-jump]"); if(jump){ jumpTo(jump.dataset.jump); return; }
-  const ph = e.target.closest("[data-img]"); if(ph){ openViewer(ph.dataset.img); return; }
+  const ph = e.target.closest("[data-img]"); if(ph){ const v = imgCache.get(ph.dataset.img); if(v === "error"){ imgTries.delete(ph.dataset.img); loadImg(ph.dataset.img); } else openViewer(ph.dataset.img); return; }
   const bub = e.target.closest(".bubble");
   if(bub){
     const sel = window.getSelection && String(window.getSelection());
@@ -2082,7 +2378,7 @@ async function deleteMsg(m){
 async function togglePin(m, pinned){
   try{
     if(pinned) await deleteDoc(doc(db, "meta", "pin"));
-    else await setDoc(doc(db, "meta", "pin"), {id:m.id, s:snippet(m).slice(0,90), by:S.uid, at:Date.now()});
+    else await setDoc(doc(db, "meta", "pin"), {id:m.id, s:snippet(m).slice(0,90), by:S.uid, at:now()});
     toast(pinned ? "Message désépinglé." : "Message épinglé en haut du fil.");
   }catch(e){ toast("Impossible de modifier l’épingle."); }
 }
@@ -2145,6 +2441,12 @@ $("btnSettings").addEventListener("click", ()=>{
     <button id="btnTest" class="linkbtn" type="button">Envoyer une notification de test</button>` : ""}
     <label class="toggle" for="tgSound"><input id="tgSound" type="checkbox" ${NOTIF.sound?"checked":""}>Son à l’arrivée d’un message</label>
     <button id="btnGuide" class="linkbtn" type="button">📱 Voir le guide pas à pas (iPhone, Android, ordinateur)</button>
+    <h3>⏰ Rappel quotidien</h3>
+    <label class="toggle" for="tgRem"><input id="tgRem" type="checkbox">Me rappeler chaque jour de passer sur le chat</label>
+    <label class="remtime" for="remTime">Heure du rappel <input id="remTime" type="time" value="${REM_DEFAULT_TIME}" step="300"></label>
+    <p id="remState" class="notifstate">Chargement…</p>
+    <button id="btnRemTest" class="linkbtn hidden" type="button">Envoyer un rappel de test (app fermée)</button>
+    <p class="note">Ce rappel arrive même quand l’app est fermée. Il vaut pour cet appareil.</p>
     <h3>Changer de mot de passe</h3>
     <div class="field"><label for="pwOld">Mot de passe actuel</label><input id="pwOld" class="input" type="password" autocomplete="current-password"></div>
     <div class="field"><label for="pwNew">Nouveau mot de passe</label><input id="pwNew" class="input" type="password" autocomplete="new-password"></div>
@@ -2168,6 +2470,15 @@ $("btnSettings").addEventListener("click", ()=>{
   const tp = $("tgPreview"); if(tp) tp.onchange = ()=>{ NOTIF.preview = tp.checked; };
   $("btnGuide").onclick = ()=>{ closeSheet(); openHelp(); };
   const tm = $("tgMent"); if(tm) tm.onchange = ()=>{ NOTIF.mentions = tm.checked; };
+  const tr = $("tgRem");
+  if(tr){
+    tr.onchange = ()=>{ if(tr.checked) enableRem(); else disableRem(); };   // pendant le toucher : l'iPhone accepte la demande d'autorisation
+    $("remTime").oninput = e => { e.target.dataset.touched = "1"; };
+    $("remTime").onchange = e => { e.target.dataset.touched = "1"; setRemTime(e.target.value); };
+    $("btnRemTest").onclick = testRem;
+    REM.msg = ""; renderRem();
+    loadRem().then(renderRem);
+  }
   const bt = $("btnTest"); if(bt) bt.onclick = ()=> showNotif("pastel prime 🌟", "Ceci est un test : les notifications marchent.");
   const ts = $("tgSound"); if(ts) ts.onchange = ()=>{ NOTIF.sound = ts.checked; if(ts.checked) ding(); };
   $("pwSave").onclick = async ()=>{
