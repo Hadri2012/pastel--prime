@@ -1,0 +1,31 @@
+name: Rappel quotidien
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rappel
+  cancel-in-progress: false
+
+jobs:
+  rappel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer l'outil d'envoi
+        run: npm install --no-save --no-audit --no-fund web-push@3.6.7
+      - name: Envoyer les rappels
+        run: node rappel-envoyer.mjs
+        env:
+          FIREBASE_API_KEY: AIzaSyDwmNVdfw8cFwJ-Qx_uKc4rzyHxjPgnF84
+          FIREBASE_PROJECT_ID: pastelprime-de8e1
+          ROBOT_EMAIL: robot-rappel@pastelprime.bot
+          VAPID_PUBLIC_KEY: BMrjLJ8BiWlbcVcPVRlklm-5u60RUXxLpDWgJyvnkiYVKl_4AjzJvAnRwMHC1SylNKyiZdNHiUqfCsUMeIv3YVE
+          ROBOT_PASSWORD: ${{ secrets.ROBOT_PASSWORD }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
